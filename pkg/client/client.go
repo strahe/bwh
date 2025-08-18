@@ -1,0 +1,390 @@
+package client
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+)
+
+const (
+	defaultBaseURL = "https://api.64clouds.com/v1"
+)
+
+// Client represents a BandwagonHost API client
+type Client struct {
+	apiKey     string
+	veid       string
+	baseURL    string
+	httpClient *http.Client
+}
+
+// NewClient creates a new BandwagonHost client
+func NewClient(apiKey, veid string) *Client {
+	return &Client{
+		apiKey:  apiKey,
+		veid:    veid,
+		baseURL: defaultBaseURL,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+// SetBaseURL sets a custom base URL for the API client
+func (c *Client) SetBaseURL(baseURL string) {
+	c.baseURL = baseURL
+}
+
+// GetServiceInfo gets information about the server
+func (c *Client) GetServiceInfo(ctx context.Context) (*ServiceInfo, error) {
+	var serviceInfo ServiceInfo
+	if err := c.doRequest(ctx, "getServiceInfo", nil, &serviceInfo); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&serviceInfo, serviceInfo.Error, serviceInfo.Message)
+}
+
+// GetLiveServiceInfo gets real-time information about the server including detailed VPS status
+// This call may take up to 15 seconds to complete as it queries the actual VPS status
+func (c *Client) GetLiveServiceInfo(ctx context.Context) (*LiveServiceInfo, error) {
+	var liveServiceInfo LiveServiceInfo
+	if err := c.doRequest(ctx, "getLiveServiceInfo", nil, &liveServiceInfo); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&liveServiceInfo, liveServiceInfo.Error, liveServiceInfo.Message)
+}
+
+// CreateSnapshot creates a snapshot with optional description
+func (c *Client) CreateSnapshot(ctx context.Context, description string) (*CreateSnapshotResponse, error) {
+	params := map[string]string{}
+	if description != "" {
+		params["description"] = description
+	}
+
+	var resp CreateSnapshotResponse
+	if err := c.doRequest(ctx, "snapshot/create", params, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// ListSnapshots gets the list of snapshots
+func (c *Client) ListSnapshots(ctx context.Context) (*SnapshotListResponse, error) {
+	var resp SnapshotListResponse
+	if err := c.doRequest(ctx, "snapshot/list", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// DeleteSnapshot deletes a snapshot by fileName
+func (c *Client) DeleteSnapshot(ctx context.Context, fileName string) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "snapshot/delete", map[string]string{"snapshot": fileName}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// RestoreSnapshot restores a snapshot by fileName (overwrites all data on VPS)
+func (c *Client) RestoreSnapshot(ctx context.Context, fileName string) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "snapshot/restore", map[string]string{"snapshot": fileName}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// ToggleSnapshotSticky sets or removes sticky attribute for a snapshot
+func (c *Client) ToggleSnapshotSticky(ctx context.Context, fileName string, sticky bool) error {
+	stickyStr := "0"
+	if sticky {
+		stickyStr = "1"
+	}
+
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "snapshot/toggleSticky", map[string]string{
+		"snapshot": fileName,
+		"sticky":   stickyStr,
+	}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// ExportSnapshot generates a token for transferring snapshot to another instance
+func (c *Client) ExportSnapshot(ctx context.Context, fileName string) (*SnapshotExportResponse, error) {
+	var resp SnapshotExportResponse
+	if err := c.doRequest(ctx, "snapshot/export", map[string]string{"snapshot": fileName}, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// ImportSnapshot imports a snapshot from another instance using VEID and token
+func (c *Client) ImportSnapshot(ctx context.Context, sourceVeid, sourceToken string) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "snapshot/import", map[string]string{
+		"sourceVeid":  sourceVeid,
+		"sourceToken": sourceToken,
+	}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// Restart restarts the VPS
+func (c *Client) Restart(ctx context.Context) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "restart", nil, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// Start starts the VPS
+func (c *Client) Start(ctx context.Context) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "start", nil, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// Stop stops the VPS
+func (c *Client) Stop(ctx context.Context) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "stop", nil, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// Kill forcefully stops a VPS that is stuck and cannot be stopped by normal means
+// Please use this feature with great care as any unsaved data will be lost.
+func (c *Client) Kill(ctx context.Context) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "kill", nil, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// GetAvailableOS gets the list of available operating systems for reinstallation
+func (c *Client) GetAvailableOS(ctx context.Context) (*AvailableOSResponse, error) {
+	var resp AvailableOSResponse
+	if err := c.doRequest(ctx, "getAvailableOS", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// ReinstallOS reinstalls the operating system
+// WARNING: This will destroy all data on the VPS!
+func (c *Client) ReinstallOS(ctx context.Context, osTemplate string) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "reinstallOS", map[string]string{"os": osTemplate}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// GetRawUsageStats gets detailed usage statistics
+func (c *Client) GetRawUsageStats(ctx context.Context) (*UsageStatsResponse, error) {
+	var resp UsageStatsResponse
+	if err := c.doRequest(ctx, "getRawUsageStats", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// GetAuditLog gets audit log entries for the VPS
+func (c *Client) GetAuditLog(ctx context.Context) (*AuditLogResponse, error) {
+	var resp AuditLogResponse
+	if err := c.doRequest(ctx, "getAuditLog", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// ResetRootPassword resets the root password and returns the new password
+func (c *Client) ResetRootPassword(ctx context.Context) (*ResetRootPasswordResponse, error) {
+	var resp ResetRootPasswordResponse
+	if err := c.doRequest(ctx, "resetRootPassword", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// doRequest performs a generic API request
+func (c *Client) doRequest(ctx context.Context, endpoint string, params map[string]string, result any) error {
+	u, err := url.Parse(c.baseURL + "/" + endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("veid", c.veid)
+	q.Set("api_key", c.apiKey)
+
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "BWH-Client/1.0")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API request failed with status: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return nil
+}
+
+// ListBackups lists all available backups
+func (c *Client) ListBackups(ctx context.Context) (*BackupListResponse, error) {
+	var resp BackupListResponse
+	if err := c.doRequest(ctx, "backup/list", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// CopyBackupToSnapshot copies a backup to a restorable snapshot
+func (c *Client) CopyBackupToSnapshot(ctx context.Context, backupToken string) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "backup/copyToSnapshot", map[string]string{
+		"backupToken": backupToken,
+	}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// SetHostname sets a new hostname for the VPS
+func (c *Client) SetHostname(ctx context.Context, newHostname string) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "setHostname", map[string]string{
+		"newHostname": newHostname,
+	}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// GetRateLimitStatus gets current API rate limit status
+func (c *Client) GetRateLimitStatus(ctx context.Context) (*RateLimitStatus, error) {
+	var resp RateLimitStatus
+	if err := c.doRequest(ctx, "getRateLimitStatus", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// GetSshKeys gets SSH keys from both Hypervisor Vault and Billing Portal
+func (c *Client) GetSshKeys(ctx context.Context) (*SshKeysResponse, error) {
+	var resp SshKeysResponse
+	if err := c.doRequest(ctx, "getSshKeys", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapError(&resp, resp.Error, resp.Message)
+}
+
+// UpdateSshKeys updates per-VM SSH keys in Hypervisor Vault (replaces all existing keys)
+func (c *Client) UpdateSshKeys(ctx context.Context, sshKeys []string) error {
+	params := map[string]string{}
+
+	// Join SSH keys with newlines as the API expects
+	if len(sshKeys) > 0 {
+		params["ssh_keys"] = fmt.Sprintf("%s\n", strings.Join(sshKeys, "\n"))
+	} else {
+		params["ssh_keys"] = ""
+	}
+
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "updateSshKeys", params, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// SetPTR sets new PTR (rDNS) record for IP address
+func (c *Client) SetPTR(ctx context.Context, ip, ptr string) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "setPTR", map[string]string{
+		"ip":  ip,
+		"ptr": ptr,
+	}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+
+// wrapError wraps a response with error checking - returns (result, error)
+func wrapError[T any](resp T, errorCode int, message string) (T, error) {
+	if errorCode != 0 {
+		var zero T
+		return zero, &BWHError{
+			Code:    errorCode,
+			Message: message,
+		}
+	}
+	return resp, nil
+}
+
+// wrapOnlyError wraps a response with error checking - returns only error
+func wrapOnlyError(errorCode int, message string) error {
+	if errorCode != 0 {
+		return &BWHError{
+			Code:    errorCode,
+			Message: message,
+		}
+	}
+	return nil
+}

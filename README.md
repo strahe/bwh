@@ -1,0 +1,208 @@
+# BWH
+
+> **English | [中文](README.zh.md)**
+
+A comprehensive Go library, CLI tool, and MCP server for managing BandwagonHost VPS instances. Provides command-line and programmatic access to most VPS management features available in KiwiVM.
+
+## Installation
+
+```bash
+# CLI tool
+go install github.com/strahe/bwh/cmd/bwh@latest
+
+# Go library
+go get github.com/strahe/bwh
+```
+
+## Quick Start
+
+```bash
+# Configure your VPS
+bwh node add production --api-key <API_KEY> --veid <VEID>
+
+# Basic operations
+bwh info                              # View server details
+bwh start/stop/restart                # Power management
+bwh usage --period 7d                 # Check usage statistics
+bwh snapshot create "backup-name"     # Create snapshots
+bwh connect                           # SSH connection
+
+# Explore more commands: bwh --help
+```
+
+### Multi-Instance Support
+
+```bash
+# Add multiple VPS instances
+bwh node add prod --api-key <KEY> --veid <VEID>
+bwh node add dev --api-key <KEY> --veid <VEID>
+
+# Target specific instance or set default
+bwh --instance prod info
+bwh node set-default prod
+
+# View all options: bwh node --help
+```
+
+## Go SDK
+
+```go
+import "github.com/strahe/bwh/pkg/client"
+
+// Initialize client
+c := client.NewClient("your-api-key", "your-veid")
+ctx := context.Background()
+
+// Get server information
+info, err := c.GetServiceInfo(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Power management
+err = c.Start(ctx)                    // Start VPS
+err = c.Stop(ctx)                     // Stop VPS  
+err = c.Restart(ctx)                  // Restart VPS
+
+// Monitoring
+usage, err := c.GetRawUsageStats(ctx) // Usage statistics
+live, err := c.GetLiveServiceInfo(ctx) // Real-time status
+
+// Backup management
+snapshot, err := c.CreateSnapshot(ctx, "backup-name")
+backups, err := c.ListBackups(ctx)
+```
+
+### Available Methods
+
+**Server Management**: `GetServiceInfo`, `GetLiveServiceInfo`, `Start`, `Stop`, `Restart`, `Kill`, `SetHostname`, `ReinstallOS`, `ResetRootPassword`
+
+**Monitoring**: `GetRawUsageStats`, `GetBasicServiceInfo`, audit log access
+
+**Backup & Recovery**: `CreateSnapshot`, `RestoreSnapshot`, `DeleteSnapshot`, backup management
+
+**Network**: SSH key management, IP/reverse DNS configuration
+
+*Complete API reference*: View [pkg/client documentation](./pkg/client) or run `go doc github.com/strahe/bwh/pkg/client` for all available methods.
+
+## MCP Server Integration
+
+BWH includes a built-in MCP (Model Context Protocol) server that enables secure AI integration with your VPS management workflows.
+
+### Start MCP Server
+
+```bash
+bwh mcp serve
+```
+
+### Configuration
+
+The BWH MCP server integrates seamlessly with various AI tools and editors. Add the appropriate configuration to your MCP client:
+
+#### Claude Desktop
+
+Add to your `claude_desktop_config.json` file:
+
+```json
+{
+  "mcpServers": {
+    "bwh": {
+      "command": "bwh",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+For custom config file: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+
+#### Claude Code
+
+```bash
+claude mcp add bwh -- bwh mcp serve
+```
+
+For custom config: `claude mcp add bwh -- bwh mcp serve --config /path/to/config.yaml`
+
+#### Cursor
+
+Add to your Cursor MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "bwh": {
+      "command": "bwh",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+For custom config file: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+
+#### Continue (VS Code Extension)
+
+Add to your Continue configuration:
+
+```json
+{
+  "mcpServers": {
+    "bwh": {
+      "transport": {
+        "type": "stdio",
+        "command": "bwh",
+        "args": ["mcp", "serve"]
+      }
+    }
+  }
+}
+```
+
+For custom config file: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+
+### Configuration Notes
+
+- **Custom Config**: Use `--config /path/to/config.yaml` flag instead of environment variables
+- **Multiple Instances**: The server automatically uses your default instance from configuration
+- **Integration**: Add to existing MCP config files without replacing other servers
+
+### Available MCP Tools (Read-only)
+
+- **vps_info_get**: Get VPS information (`instance?`, `compact?`, `live?`)
+- **vps_usage_get**: Get usage statistics (`instance?`, `period?`, `days?`, `group_by?`)
+- **snapshot_list**: List snapshots (`instance?`, `sticky_only?`, `name_contains?`, `sort_by?`, `order?`, `limit?`)
+- **backup_list**: List backups (`instance?`, `os_contains?`, `since?`, `until?`, `sort_by?`, `order?`, `limit?`)
+- **vps_audit_get**: Get audit logs (`instance?`, `since?`, `until?`, `limit?`, `ip_contains?`, `type?`)
+
+All MCP tools are safe, read-only operations that won't modify your VPS configuration or data.
+
+## Available Commands
+
+```
+node            Manage BWH VPS nodes configuration
+info            Display comprehensive VPS information
+rate-limit      Check API rate limit status
+connect         SSH into VPS (passwordless, using local SSH keys)
+ssh             Manage SSH keys
+start/stop      Start/stop the VPS
+restart         Restart the VPS
+kill            Forcefully stop a stuck VPS (WARNING: potential data loss)
+hostname        Set hostname for the VPS
+setPTR          Set PTR (rDNS) record for IP address
+reinstall       Reinstall VPS operating system (WARNING: destroys all data)
+usage           Display detailed VPS usage statistics
+audit           Display audit log entries
+reset-password  Reset the root password
+snapshot        Manage VPS snapshots
+backup          Manage VPS backups
+mcp             Run MCP server for read-only BWH management
+```
+
+Use `bwh <command> --help` to view detailed options and usage examples for each command.
+
+## Build
+
+```bash
+make build  # or: go build -o bwh ./cmd/bwh
+```
