@@ -26,3 +26,4 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - run: make test
+      - run: make build
