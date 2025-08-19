@@ -1,0 +1,10 @@
+{
+  "error": 788888,
+  "message": "VE is currently locked, try again in a few minutes",
+  "additionalErrorInfo": "OS Reinstall: debian-13-x86_64",
+  "additionalLockingInfo": {
+    "last_status_update_s_ago": 19,
+    "completed_percent": 80,
+    "friendly_progress_message": "Starting VM"
+  }
+}

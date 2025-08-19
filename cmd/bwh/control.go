@@ -66,6 +66,13 @@ var hostnameCmd = &cli.Command{
 	Name:      "hostname",
 	Usage:     "set hostname for the VPS",
 	ArgsUsage: "<new_hostname>",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "yes",
+			Aliases: []string{"y"},
+			Usage:   "skip confirmation prompt",
+		},
+	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("hostname command requires exactly one argument: <new_hostname>")
@@ -81,6 +88,14 @@ var hostnameCmd = &cli.Command{
 			return err
 		}
 
+		// Confirmation prompt
+		if !cmd.Bool("yes") {
+			if !confirmAction("set hostname", resolvedName, newHostname) {
+				fmt.Println("Operation cancelled.")
+				return nil
+			}
+		}
+
 		fmt.Printf("Setting hostname to '%s' for instance: %s\n", newHostname, resolvedName)
 
 		if err := bwhClient.SetHostname(ctx, newHostname); err != nil {
@@ -93,9 +108,17 @@ var hostnameCmd = &cli.Command{
 }
 
 var setPTRCmd = &cli.Command{
-	Name:      "setPTR",
+	Name:      "set-ptr",
+	Aliases:   []string{"setPTR"},
 	Usage:     "set new PTR (rDNS) record for IP address",
 	ArgsUsage: "<ip> <ptr>",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "yes",
+			Aliases: []string{"y"},
+			Usage:   "skip confirmation prompt",
+		},
+	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 2 {
 			return fmt.Errorf("setPTR command requires exactly two arguments: <ip> <ptr>")
@@ -114,6 +137,14 @@ var setPTRCmd = &cli.Command{
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
+		}
+
+		// Confirmation prompt
+		if !cmd.Bool("yes") {
+			if !confirmAction("set PTR", resolvedName, ip, ptr) {
+				fmt.Println("Operation cancelled.")
+				return nil
+			}
 		}
 
 		fmt.Printf("Setting PTR record for IP '%s' to '%s' for instance: %s\n", ip, ptr, resolvedName)
@@ -165,7 +196,7 @@ func executeVPSAction(ctx context.Context, cmd *cli.Command, action string, need
 	return nil
 }
 
-func confirmAction(action, instanceName string) bool {
+func confirmAction(action, instanceName string, args ...string) bool {
 	var prompt string
 	switch action {
 	case "stop":
@@ -180,9 +211,25 @@ func confirmAction(action, instanceName string) bool {
 		fmt.Printf("Reset root password for VPS '%s'?\n", instanceName)
 		fmt.Printf("This will generate a new random root password.\n")
 		prompt = "Continue? [y/N]: "
+	case "set hostname":
+		if len(args) > 0 {
+			fmt.Printf("Set hostname to '%s' for VPS '%s'? [y/N]: ", args[0], instanceName)
+		} else {
+			fmt.Printf("Set hostname for VPS '%s'? [y/N]: ", instanceName)
+		}
+		prompt = ""
+	case "set PTR":
+		if len(args) >= 2 {
+			fmt.Printf("Set PTR record for IP '%s' to '%s' for VPS '%s'? [y/N]: ", args[0], args[1], instanceName)
+		} else {
+			fmt.Printf("Set PTR record for VPS '%s'? [y/N]: ", instanceName)
+		}
+		prompt = ""
 	}
 
-	fmt.Print(prompt)
+	if prompt != "" {
+		fmt.Print(prompt)
+	}
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
