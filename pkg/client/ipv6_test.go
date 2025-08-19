@@ -8,22 +8,22 @@ import (
 
 func TestIPv6AddResponse(t *testing.T) {
 	tests := []struct {
-		name        string
-		jsonData    string
-		wantError   int
-		wantSubnet  string
+		name       string
+		jsonData   string
+		wantError  int
+		wantSubnet string
 	}{
 		{
-			name:        "successful IPv6 add",
-			jsonData:    `{"error": 0, "assigned_subnet": "2001:db8:1234:5678::"}`,
-			wantError:   0,
-			wantSubnet:  "2001:db8:1234:5678::",
+			name:       "successful IPv6 add",
+			jsonData:   `{"error": 0, "assigned_subnet": "2001:db8:1234:5678::"}`,
+			wantError:  0,
+			wantSubnet: "2001:db8:1234:5678::",
 		},
 		{
-			name:        "error response",
-			jsonData:    `{"error": 788888, "message": "VE is currently locked, try again in a few minutes"}`,
-			wantError:   788888,
-			wantSubnet:  "",
+			name:       "error response",
+			jsonData:   `{"error": 788888, "message": "VE is currently locked, try again in a few minutes"}`,
+			wantError:  788888,
+			wantSubnet: "",
 		},
 	}
 
@@ -63,7 +63,7 @@ func TestClient_IPv6Methods_Mock(t *testing.T) {
 		t.Logf("AddIPv6 returned error (expected in mock): %v", err)
 	}
 
-	// Test DeleteIPv6 - this would need to be mocked in the server  
+	// Test DeleteIPv6 - this would need to be mocked in the server
 	err = client.DeleteIPv6(ctx, "2001:db8:1234:5678::")
 	if err == nil {
 		t.Log("DeleteIPv6 method called successfully")

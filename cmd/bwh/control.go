@@ -158,7 +158,6 @@ var setPTRCmd = &cli.Command{
 	},
 }
 
-
 func executeVPSAction(ctx context.Context, cmd *cli.Command, action string, needsConfirm bool) error {
 	bwhClient, resolvedName, err := createBWHClient(cmd)
 	if err != nil {

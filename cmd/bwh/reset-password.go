@@ -73,7 +73,7 @@ var resetPasswordCmd = &cli.Command{
 		passwordContent += fmt.Sprintf("Generated at: %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
 		passwordContent += fmt.Sprintf("Password: %s\n", result.Password)
 
-		err = os.WriteFile(filePath, []byte(passwordContent), 0600)
+		err = os.WriteFile(filePath, []byte(passwordContent), 0o600)
 		if err != nil {
 			return fmt.Errorf("failed to write password to file: %w", err)
 		}

@@ -558,7 +558,7 @@ func downloadFileWithFallback(ctx context.Context, snapshot *client.SnapshotInfo
 		if err == nil {
 			return nil
 		}
-		
+
 		// Check if it's a TLS-related error
 		if strings.Contains(err.Error(), "tls:") || strings.Contains(err.Error(), "handshake") {
 			fmt.Printf("⚠️  HTTPS download failed due to TLS issues: %v\n", err)
@@ -569,13 +569,13 @@ func downloadFileWithFallback(ctx context.Context, snapshot *client.SnapshotInfo
 		}
 		return err
 	}
-	
+
 	// Only HTTP available
 	if snapshot.DownloadLink != "" {
 		fmt.Printf("📡 Using HTTP download (HTTPS not available)\n")
 		return downloadFile(ctx, snapshot.DownloadLink, outputPath, snapshot.Size.Value)
 	}
-	
+
 	return fmt.Errorf("no download links available")
 }
 
@@ -588,14 +588,14 @@ func downloadFile(ctx context.Context, downloadURL, filepath string, expectedSiz
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: skipTLSVerify,
 	}
-	
+
 	// For IP-based HTTPS URLs, use more permissive TLS settings
 	if skipTLSVerify {
 		tlsConfig.MinVersion = tls.VersionTLS10 // Support older TLS versions
 		tlsConfig.MaxVersion = tls.VersionTLS13 // Support newest TLS versions
-		tlsConfig.CipherSuites = nil           // Use default cipher suites
+		tlsConfig.CipherSuites = nil            // Use default cipher suites
 	}
-	
+
 	client := &http.Client{
 		Timeout: 30 * time.Minute, // Set a reasonable timeout for large downloads
 		Transport: &http.Transport{

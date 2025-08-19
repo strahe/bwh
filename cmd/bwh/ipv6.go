@@ -254,13 +254,13 @@ func displayIPv6InfoCompact(info *client.ServiceInfo, instanceName string) {
 func isValidIPv6Subnet(subnet string) bool {
 	// Remove /64 suffix if present
 	subnet = strings.TrimSuffix(subnet, "/64")
-	
+
 	// Parse as IPv6 address
 	ip := net.ParseIP(subnet)
 	if ip == nil {
 		return false
 	}
-	
+
 	// Check if it's IPv6 (not IPv4)
 	return ip.To4() == nil
 }
