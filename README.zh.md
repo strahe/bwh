@@ -2,15 +2,17 @@
 
 > **[English](README.md) | 中文**
 
-功能完备的 Go 库、CLI 工具和 MCP 服务器，用于管理搬瓦工 VPS 实例。通过命令行和编程方式提供 KiwiVM 的大部分 VPS 管理功能。
+用于管理搬瓦工（KiwiVM）VPS 的 Go SDK、CLI 和 MCP 服务器，支持命令行与编程方式访问大部分功能。
 
 ## 安装
 
+前置条件：Go 1.21+；KiwiVM VEID 与 API Key。
+
 ```bash
-# CLI 工具
+# CLI 或者 MCP
 go install github.com/strahe/bwh/cmd/bwh@latest
 
-# Go 库
+# Go SDK
 go get github.com/strahe/bwh
 ```
 
@@ -27,6 +29,8 @@ bwh usage --period 7d                 # 检查使用统计
 bwh snapshot create "备份名称"         # 创建快照
 bwh iso images                        # 列出可用 ISO 镜像
 bwh iso mount ubuntu-20.04.iso        # 挂载 ISO 用于救援/安装
+bwh ipv6 add                          # 分配新的 IPv6 /64 子网
+bwh ipv6 list                         # 列出 IPv6 子网
 bwh connect                           # SSH 连接
 
 # 探索更多命令: bwh --help
@@ -49,7 +53,11 @@ bwh node set-default prod
 ## Go SDK
 
 ```go
-import "github.com/strahe/bwh/pkg/client"
+import (
+    "context"
+    "log"
+    "github.com/strahe/bwh/pkg/client"
+)
 
 // 初始化客户端
 c := client.NewClient("your-api-key", "your-veid")
@@ -63,7 +71,7 @@ if err != nil {
 
 // 电源管理
 err = c.Start(ctx)                    // 启动 VPS
-err = c.Stop(ctx)                     // 停止 VPS  
+err = c.Stop(ctx)                     // 停止 VPS
 err = c.Restart(ctx)                  // 重启 VPS
 
 // 监控
@@ -83,7 +91,7 @@ backups, err := c.ListBackups(ctx)
 
 **备份和恢复**: `CreateSnapshot`、`RestoreSnapshot`、`DeleteSnapshot`、备份管理
 
-**网络**: SSH 密钥管理、IP/反向 DNS 配置
+**网络**: SSH 密钥管理、IP/反向 DNS 配置、IPv6 子网管理
 
 *完整 API 参考*: 查看 [pkg/client 文档](./pkg/client) 或运行 `go doc github.com/strahe/bwh/pkg/client` 获取所有可用方法。
 
@@ -116,7 +124,7 @@ BWH MCP 服务器可与多种 AI 工具和编辑器无缝集成。向您的 MCP 
 }
 ```
 
-自定义配置文件: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+ 
 
 #### Claude Code
 
@@ -124,7 +132,7 @@ BWH MCP 服务器可与多种 AI 工具和编辑器无缝集成。向您的 MCP 
 claude mcp add bwh -- bwh mcp serve
 ```
 
-自定义配置: `claude mcp add bwh -- bwh mcp serve --config /path/to/config.yaml`
+ 
 
 #### Cursor
 
@@ -141,7 +149,7 @@ claude mcp add bwh -- bwh mcp serve
 }
 ```
 
-自定义配置文件: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+ 
 
 #### Continue (VS Code 扩展)
 
@@ -161,11 +169,11 @@ claude mcp add bwh -- bwh mcp serve
 }
 ```
 
-自定义配置文件: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+ 
 
 ### 配置说明
 
-- **自定义配置**: 使用 `--config /path/to/config.yaml` 参数而非环境变量
+- **自定义配置**: 使用 `--config /path/to/config.yaml` 指定配置文件
 - **多实例**: 服务器自动使用配置中的默认实例
 - **集成**: 添加到现有 MCP 配置文件中，不替换其他服务器
 
@@ -200,6 +208,7 @@ audit           显示审计日志条目
 reset-password  重置 root 密码
 snapshot        管理 VPS 快照
 backup          管理 VPS 备份
+ipv6            管理 IPv6 子网（添加、删除、列出）
 mcp             运行 MCP 服务器以进行只读 BWH 管理
 ```
 
@@ -210,3 +219,9 @@ mcp             运行 MCP 服务器以进行只读 BWH 管理
 ```bash
 make build  # 或者: go build -o bwh ./cmd/bwh
 ```
+
+运行测试：`make test`
+
+## 许可证
+
+MIT，详见 `LICENSE`。

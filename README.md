@@ -2,15 +2,17 @@
 
 > **English | [中文](README.zh.md)**
 
-A comprehensive Go library, CLI tool, and MCP server for managing BandwagonHost VPS instances. Provides command-line and programmatic access to most VPS management features available in KiwiVM.
+Go SDK, CLI, and MCP server for managing BandwagonHost (KiwiVM) VPS, with command-line and programmatic access to most features.
 
 ## Installation
 
+Prerequisites: Go 1.21+; KiwiVM VEID and API key.
+
 ```bash
-# CLI tool
+# CLI or MCP
 go install github.com/strahe/bwh/cmd/bwh@latest
 
-# Go library
+# Go SDK
 go get github.com/strahe/bwh
 ```
 
@@ -27,6 +29,8 @@ bwh usage --period 7d                 # Check usage statistics
 bwh snapshot create "backup-name"     # Create snapshots
 bwh iso images                        # List available ISO images
 bwh iso mount ubuntu-20.04.iso        # Mount ISO for rescue/install
+bwh ipv6 add                          # Assign new IPv6 /64 subnet
+bwh ipv6 list                         # List IPv6 subnets
 bwh connect                           # SSH connection
 
 # Explore more commands: bwh --help
@@ -49,7 +53,11 @@ bwh node set-default prod
 ## Go SDK
 
 ```go
-import "github.com/strahe/bwh/pkg/client"
+import (
+    "context"
+    "log"
+    "github.com/strahe/bwh/pkg/client"
+)
 
 // Initialize client
 c := client.NewClient("your-api-key", "your-veid")
@@ -63,7 +71,7 @@ if err != nil {
 
 // Power management
 err = c.Start(ctx)                    // Start VPS
-err = c.Stop(ctx)                     // Stop VPS  
+err = c.Stop(ctx)                     // Stop VPS
 err = c.Restart(ctx)                  // Restart VPS
 
 // Monitoring
@@ -83,7 +91,7 @@ backups, err := c.ListBackups(ctx)
 
 **Backup & Recovery**: `CreateSnapshot`, `RestoreSnapshot`, `DeleteSnapshot`, backup management
 
-**Network**: SSH key management, IP/reverse DNS configuration
+**Network**: SSH key management, IP/reverse DNS configuration, IPv6 subnet management
 
 *Complete API reference*: View [pkg/client documentation](./pkg/client) or run `go doc github.com/strahe/bwh/pkg/client` for all available methods.
 
@@ -116,7 +124,7 @@ Add to your `claude_desktop_config.json` file:
 }
 ```
 
-For custom config file: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+ 
 
 #### Claude Code
 
@@ -124,7 +132,7 @@ For custom config file: `"args": ["mcp", "serve", "--config", "/path/to/config.y
 claude mcp add bwh -- bwh mcp serve
 ```
 
-For custom config: `claude mcp add bwh -- bwh mcp serve --config /path/to/config.yaml`
+ 
 
 #### Cursor
 
@@ -141,7 +149,7 @@ Add to your Cursor MCP configuration:
 }
 ```
 
-For custom config file: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+ 
 
 #### Continue (VS Code Extension)
 
@@ -161,11 +169,11 @@ Add to your Continue configuration:
 }
 ```
 
-For custom config file: `"args": ["mcp", "serve", "--config", "/path/to/config.yaml"]`
+ 
 
 ### Configuration Notes
 
-- **Custom Config**: Use `--config /path/to/config.yaml` flag instead of environment variables
+- **Custom Config**: Use `--config /path/to/config.yaml` to specify a config file
 - **Multiple Instances**: The server automatically uses your default instance from configuration
 - **Integration**: Add to existing MCP config files without replacing other servers
 
@@ -200,6 +208,7 @@ audit           Display audit log entries
 reset-password  Reset the root password
 snapshot        Manage VPS snapshots
 backup          Manage VPS backups
+ipv6            Manage IPv6 subnets (add, delete, list)
 mcp             Run MCP server for read-only BWH management
 ```
 
@@ -210,3 +219,9 @@ Use `bwh <command> --help` to view detailed options and usage examples for each 
 ```bash
 make build  # or: go build -o bwh ./cmd/bwh
 ```
+
+Run tests: `make test`
+
+## License
+
+MIT. See `LICENSE`.

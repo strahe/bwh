@@ -111,20 +111,20 @@ type LiveServiceInfo struct {
 	SSHPort        int         `json:"ssh_port"`         // SSH port of the VPS
 
 	// OpenVZ specific fields
-	VzStatus map[string]interface{} `json:"vz_status,omitempty"` // OpenVZ beancounters, load average, processes, etc.
-	VzQuota  map[string]interface{} `json:"vz_quota,omitempty"`  // OpenVZ disk size, inodes and usage info
+	VzStatus map[string]any `json:"vz_status,omitempty"` // OpenVZ beancounters, load average, processes, etc.
+	VzQuota  map[string]any `json:"vz_quota,omitempty"`  // OpenVZ disk size, inodes and usage info
 
 	// KVM specific fields
 	VeStatus            string      `json:"ve_status,omitempty"`             // Starting, Running or Stopped
 	VeMac1              string      `json:"ve_mac1,omitempty"`               // MAC address of primary network interface
-	VeUsedDiskSpaceB    FlexibleInt `json:"ve_used_disk_space_b,omitempty"`  // Occupied disk space in bytes
-	VeDiskQuotaGB       FlexibleInt `json:"ve_disk_quota_gb,omitempty"`      // Actual size of disk image in GB
-	IsDiskThrottled     FlexibleInt `json:"is_disk_throttled,omitempty"`     // 0 = not throttled, 1 = throttled (resets 15-180 min)
+	VeUsedDiskSpaceB    FlexibleInt `json:"ve_used_disk_space_b,omitzero"`   // Occupied disk space in bytes
+	VeDiskQuotaGB       FlexibleInt `json:"ve_disk_quota_gb,omitzero"`       // Actual size of disk image in GB
+	IsDiskThrottled     FlexibleInt `json:"is_disk_throttled,omitzero"`      // 0 = not throttled, 1 = throttled (resets 15-180 min)
 	LiveHostname        string      `json:"live_hostname,omitempty"`         // Result of "hostname" command inside VPS
 	LoadAverage         string      `json:"load_average,omitempty"`          // Raw load average string
-	MemAvailableKB      FlexibleInt `json:"mem_available_kb,omitempty"`      // Available RAM in KB
-	SwapTotalKB         FlexibleInt `json:"swap_total_kb,omitempty"`         // Total Swap in KB
-	SwapAvailableKB     FlexibleInt `json:"swap_available_kb,omitempty"`     // Available Swap in KB
+	MemAvailableKB      FlexibleInt `json:"mem_available_kb,omitzero"`       // Available RAM in KB
+	SwapTotalKB         FlexibleInt `json:"swap_total_kb,omitzero"`          // Total Swap in KB
+	SwapAvailableKB     FlexibleInt `json:"swap_available_kb,omitzero"`      // Available Swap in KB
 	ScreendumpPngBase64 string      `json:"screendump_png_base64,omitempty"` // base64 encoded PNG screenshot of VGA console
 }
 
@@ -275,4 +275,10 @@ func splitSshKeys(keys string) []string {
 		}
 	}
 	return result
+}
+
+// IPv6AddResponse represents the response from ipv6/add API call
+type IPv6AddResponse struct {
+	BaseResponse
+	AssignedSubnet string `json:"assigned_subnet"` // Newly assigned IPv6 /64 subnet
 }

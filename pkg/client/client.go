@@ -441,3 +441,27 @@ func wrapOnlyErrorFromBase(base BaseResponse) error {
 	}
 	return nil
 }
+
+// AddIPv6 assigns a new IPv6 /64 subnet to the VPS
+func (c *Client) AddIPv6(ctx context.Context) (*IPv6AddResponse, error) {
+	var resp IPv6AddResponse
+	if err := c.doRequest(ctx, "ipv6/add", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
+// DeleteIPv6 releases a specified IPv6 /64 subnet from the VPS
+func (c *Client) DeleteIPv6(ctx context.Context, subnet string) error {
+	params := map[string]string{
+		"ip": subnet,
+	}
+
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "ipv6/delete", params, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyErrorFromBase(resp)
+}

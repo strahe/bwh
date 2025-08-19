@@ -46,6 +46,7 @@ func main() {
 			resetPasswordCmd,
 			snapshotCmd,
 			backupCmd,
+			ipv6Cmd,
 			mcpCmd,
 		},
 	}
