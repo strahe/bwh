@@ -84,6 +84,11 @@ func getDefaultConfigPath() (string, error) {
 
 // Load loads the configuration from file
 func (m *Manager) Load() error {
+	// Check and fix file permissions if config exists
+	if err := m.ensureSecurePermissions(); err != nil {
+		return fmt.Errorf("failed to ensure secure permissions: %w", err)
+	}
+
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {
 		return err
@@ -268,6 +273,27 @@ func (m *Manager) GetAvailableInstances() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func (m *Manager) ensureSecurePermissions() error {
+	dir := filepath.Dir(m.configPath)
+	if dirInfo, err := os.Stat(dir); err == nil {
+		if dirInfo.Mode().Perm() != 0o700 {
+			if err := os.Chmod(dir, 0o700); err != nil {
+				return fmt.Errorf("failed to fix directory permissions: %w", err)
+			}
+		}
+	}
+
+	if fileInfo, err := os.Stat(m.configPath); err == nil {
+		if fileInfo.Mode().Perm() != 0o600 {
+			if err := os.Chmod(m.configPath, 0o600); err != nil {
+				return fmt.Errorf("failed to fix config file permissions: %w", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func validateInstanceName(name string) error {
