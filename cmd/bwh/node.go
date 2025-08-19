@@ -105,8 +105,9 @@ var nodeRemoveCmd = &cli.Command{
 	Aliases:   []string{"rm"},
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
-			Name:  "force",
-			Usage: "force removal without confirmation",
+			Name:    "yes",
+			Aliases: []string{"y"},
+			Usage:   "skip confirmation prompt",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -122,12 +123,13 @@ var nodeRemoveCmd = &cli.Command{
 			return err
 		}
 
-		// Confirmation prompt unless forced
-		if !cmd.Bool("force") {
-			fmt.Printf("Are you sure you want to remove node '%s'? [y/N]: ", name)
-			var response string
-			fmt.Scanln(&response) //nolint:errcheck
-			if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+		// Confirmation prompt unless skipped
+		if !cmd.Bool("yes") {
+			confirmed, err := promptConfirmation(fmt.Sprintf("Are you sure you want to remove node '%s'?", name))
+			if err != nil {
+				return err
+			}
+			if !confirmed {
 				fmt.Println("Operation cancelled")
 				return nil
 			}
