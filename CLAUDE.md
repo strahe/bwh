@@ -23,10 +23,10 @@ Common commands:
 - `cmd/bwh/` - CLI application entry point
   - `main.go` - Main CLI application using urfave/cli/v3
   - `helpers.go` - Shared client initialization logic (ALWAYS use these helpers)
-  - `control.go` - VPS control commands (start, stop, restart, kill, hostname)
+  - `control.go` - VPS control commands (start, stop, restart, kill, hostname, set-ptr)
   - `info.go` - VPS information display (detailed/compact formats)
   - `node.go` - Multi-instance configuration management
-  - `snapshot.go`, `backup.go`, `usage.go`, `audit.go`, etc. - Feature-specific commands
+  - `snapshot.go`, `backup.go`, `usage.go`, `audit.go`, `iso.go`, etc. - Feature-specific commands
   - `mcp.go` - MCP server command
 - `pkg/client/` - Public API client library
   - `client.go` - BWH API client with comprehensive VPS management methods
@@ -56,11 +56,13 @@ bwh mcp serve  # Start MCP server over stdio
 - `snapshot_list` - List snapshots with filtering and sorting options
 - `backup_list` - List backups with time range and filtering
 - `vps_audit_get` - Get audit logs with time range and filtering
+- `iso_list` - List available and mounted ISO images (`instance?`)
 
 ### Common Usage Patterns
 - `vps_info_get(compact=true)` for quick status overview
 - `vps_info_get(live=true)` for real-time data and current status
 - `vps_usage_get(days=N, group_by=day)` for usage statistics over N days
+- `iso_list()` for available and mounted ISO images information
 - When `instance` parameter is omitted, uses default from config
 
 ### Implementation Notes
@@ -81,6 +83,31 @@ bwhClient, instance, resolvedName, err := createBWHClientWithInstance(cmd)
 ```
 
 **DO NOT** duplicate client initialization code in commands.
+
+## Documentation Synchronization
+
+**CRITICAL**: Documentation must always stay synchronized with the actual project state.
+
+### Rules
+- **README files** (`README.md`, `README.zh.md`) must accurately reflect current features and commands
+- **CLAUDE.md** must be updated when architecture, commands, or key patterns change
+- **Update triggers**: When adding/removing commands, changing API methods, or modifying core functionality
+- **Verification**: Always check if documentation updates are needed after code changes
+
+### When to Update Documentation
+- ✅ Adding new CLI commands or subcommands
+- ✅ Adding new API client methods
+- ✅ Changing command names, flags, or behavior
+- ✅ Modifying package structure or key patterns
+- ✅ Adding new MCP tools or capabilities
+- ✅ Changing development workflows or build processes
+
+### Documentation Files to Consider
+- `README.md` - English documentation (commands list, API methods, usage examples)
+- `README.zh.md` - Chinese documentation (同步更新)
+- `CLAUDE.md` - Development guidance (architecture, patterns, commands location)
+
+**Failure to maintain documentation synchronization leads to user confusion and development inefficiency.**
 
 ## Code Style
 

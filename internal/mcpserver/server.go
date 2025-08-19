@@ -612,6 +612,52 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 			}), nil
 		},
 	)
+
+	// iso_list
+	s.AddTool(
+		mcp.NewTool(
+			"iso_list",
+			mcp.WithDescription("List available and mounted ISO images for BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+
+			inst, resolved, err := manager.ResolveInstance(requested)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("resolve instance failed: %v", err)), nil
+			}
+			c := client.NewClient(inst.APIKey, inst.VeID)
+			if inst.Endpoint != "" {
+				c.SetBaseURL(inst.Endpoint)
+			}
+			serviceInfo, err := c.GetServiceInfo(ctx)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("get service info failed: %v", err)), nil
+			}
+
+			// Prepare mounted images info
+			mounted := map[string]string{}
+			if serviceInfo.ISO1 != "" {
+				mounted["ISO1"] = serviceInfo.ISO1
+			}
+			if serviceInfo.ISO2 != "" {
+				mounted["ISO2"] = serviceInfo.ISO2
+			}
+
+			return mcp.NewToolResultStructuredOnly(map[string]any{
+				"instance":        resolved,
+				"available_isos":  serviceInfo.AvailableISOs,
+				"mounted_isos":    mounted,
+				"total_available": len(serviceInfo.AvailableISOs),
+				"total_mounted":   len(mounted),
+			}), nil
+		},
+	)
 }
 
 // registerResources exposes a minimal set of resources to browse last-fetched data or config view

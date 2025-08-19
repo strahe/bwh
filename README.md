@@ -25,6 +25,8 @@ bwh info                              # View server details
 bwh start/stop/restart                # Power management
 bwh usage --period 7d                 # Check usage statistics
 bwh snapshot create "backup-name"     # Create snapshots
+bwh iso images                        # List available ISO images
+bwh iso mount ubuntu-20.04.iso        # Mount ISO for rescue/install
 bwh connect                           # SSH connection
 
 # Explore more commands: bwh --help
@@ -75,7 +77,7 @@ backups, err := c.ListBackups(ctx)
 
 ### Available Methods
 
-**Server Management**: `GetServiceInfo`, `GetLiveServiceInfo`, `Start`, `Stop`, `Restart`, `Kill`, `SetHostname`, `ReinstallOS`, `ResetRootPassword`
+**Server Management**: `GetServiceInfo`, `GetLiveServiceInfo`, `Start`, `Stop`, `Restart`, `Kill`, `SetHostname`, `ReinstallOS`, `ResetRootPassword`, `MountISO`, `UnmountISO`
 
 **Monitoring**: `GetRawUsageStats`, `GetBasicServiceInfo`, audit log access
 
@@ -174,6 +176,7 @@ For custom config file: `"args": ["mcp", "serve", "--config", "/path/to/config.y
 - **snapshot_list**: List snapshots (`instance?`, `sticky_only?`, `name_contains?`, `sort_by?`, `order?`, `limit?`)
 - **backup_list**: List backups (`instance?`, `os_contains?`, `since?`, `until?`, `sort_by?`, `order?`, `limit?`)
 - **vps_audit_get**: Get audit logs (`instance?`, `since?`, `until?`, `limit?`, `ip_contains?`, `type?`)
+- **iso_list**: List available and mounted ISO images (`instance?`)
 
 All MCP tools are safe, read-only operations that won't modify your VPS configuration or data.
 
@@ -189,7 +192,8 @@ start/stop      Start/stop the VPS
 restart         Restart the VPS
 kill            Forcefully stop a stuck VPS (WARNING: potential data loss)
 hostname        Set hostname for the VPS
-setPTR          Set PTR (rDNS) record for IP address
+set-ptr         Set PTR (rDNS) record for IP address
+iso             Manage ISO images for VPS boot
 reinstall       Reinstall VPS operating system (WARNING: destroys all data)
 usage           Display detailed VPS usage statistics
 audit           Display audit log entries

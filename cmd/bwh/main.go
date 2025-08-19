@@ -39,6 +39,7 @@ func main() {
 			killCmd,
 			hostnameCmd,
 			setPTRCmd,
+			isoCmd,
 			reinstallCmd,
 			usageCmd,
 			auditCmd,

@@ -25,6 +25,8 @@ bwh info                              # 查看服务器详情
 bwh start/stop/restart                # 电源管理
 bwh usage --period 7d                 # 检查使用统计
 bwh snapshot create "备份名称"         # 创建快照
+bwh iso images                        # 列出可用 ISO 镜像
+bwh iso mount ubuntu-20.04.iso        # 挂载 ISO 用于救援/安装
 bwh connect                           # SSH 连接
 
 # 探索更多命令: bwh --help
@@ -75,7 +77,7 @@ backups, err := c.ListBackups(ctx)
 
 ### 可用方法
 
-**服务器管理**: `GetServiceInfo`、`GetLiveServiceInfo`、`Start`、`Stop`、`Restart`、`Kill`、`SetHostname`、`ReinstallOS`、`ResetRootPassword`
+**服务器管理**: `GetServiceInfo`、`GetLiveServiceInfo`、`Start`、`Stop`、`Restart`、`Kill`、`SetHostname`、`ReinstallOS`、`ResetRootPassword`、`MountISO`、`UnmountISO`
 
 **监控**: `GetRawUsageStats`、`GetBasicServiceInfo`、审计日志访问
 
@@ -174,6 +176,7 @@ claude mcp add bwh -- bwh mcp serve
 - **snapshot_list**: 列出快照 (`instance?`, `sticky_only?`, `name_contains?`, `sort_by?`, `order?`, `limit?`)
 - **backup_list**: 列出备份 (`instance?`, `os_contains?`, `since?`, `until?`, `sort_by?`, `order?`, `limit?`)
 - **vps_audit_get**: 获取审计日志 (`instance?`, `since?`, `until?`, `limit?`, `ip_contains?`, `type?`)
+- **iso_list**: 列出可用和已挂载的 ISO 镜像 (`instance?`)
 
 所有 MCP 工具都是安全的只读操作，不会修改您的 VPS 配置或数据。
 
@@ -189,7 +192,8 @@ start/stop      启动/停止 VPS
 restart         重启 VPS
 kill            强制停止卡住的 VPS（警告：可能数据丢失）
 hostname        设置 VPS 主机名
-setPTR          设置 IP 地址的 PTR（rDNS）记录
+set-ptr         设置 IP 地址的 PTR（rDNS）记录
+iso             管理 VPS 启动用 ISO 镜像
 reinstall       重装 VPS 操作系统（警告：摧毁所有数据）
 usage           显示详细 VPS 使用统计
 audit           显示审计日志条目

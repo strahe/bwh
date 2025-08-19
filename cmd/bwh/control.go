@@ -158,6 +158,7 @@ var setPTRCmd = &cli.Command{
 	},
 }
 
+
 func executeVPSAction(ctx context.Context, cmd *cli.Command, action string, needsConfirm bool) error {
 	bwhClient, resolvedName, err := createBWHClient(cmd)
 	if err != nil {
@@ -225,6 +226,18 @@ func confirmAction(action, instanceName string, args ...string) bool {
 			fmt.Printf("Set PTR record for VPS '%s'? [y/N]: ", instanceName)
 		}
 		prompt = ""
+	case "mount ISO":
+		if len(args) > 0 {
+			fmt.Printf("Mount ISO '%s' for VPS '%s'?\n", args[0], instanceName)
+		} else {
+			fmt.Printf("Mount ISO for VPS '%s'?\n", instanceName)
+		}
+		fmt.Printf("⚠️  VPS must be completely shut down and restarted after this operation.\n")
+		prompt = "Continue? [y/N]: "
+	case "unmount ISO":
+		fmt.Printf("Unmount ISO for VPS '%s'?\n", instanceName)
+		fmt.Printf("⚠️  VPS must be completely shut down and restarted after this operation.\n")
+		prompt = "Continue? [y/N]: "
 	}
 
 	if prompt != "" {

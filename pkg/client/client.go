@@ -367,6 +367,30 @@ func (c *Client) SetPTR(ctx context.Context, ip, ptr string) error {
 	return wrapOnlyError(resp.Error, resp.Message)
 }
 
+// MountISO sets ISO image to boot from
+// VM must be completely shut down and restarted after this API call
+func (c *Client) MountISO(ctx context.Context, iso string) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "iso/mount", map[string]string{
+		"iso": iso,
+	}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
+// UnmountISO removes ISO image and configures VM to boot from primary storage
+// VM must be completely shut down and restarted after this API call
+func (c *Client) UnmountISO(ctx context.Context) error {
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "iso/unmount", nil, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyError(resp.Error, resp.Message)
+}
+
 
 // wrapError wraps a response with error checking - returns (result, error)
 func wrapError[T any](resp T, errorCode int, message string) (T, error) {
