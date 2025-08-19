@@ -207,7 +207,6 @@ var privateIPDeleteCmd = &cli.Command{
 	},
 }
 
-
 // yesNo converts a boolean to user-friendly Yes/No string
 func yesNo(b bool) string {
 	if b {

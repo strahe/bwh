@@ -1,6 +1,12 @@
-# BWH
+# bwh
+
+[![CI](https://github.com/strahe/bwh/workflows/CI/badge.svg)](https://github.com/strahe/bwh/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/strahe/bwh)](https://goreportcard.com/report/github.com/strahe/bwh)
+[![Release](https://img.shields.io/github/v/release/strahe/bwh)](https://github.com/strahe/bwh/releases)
 
 > **[English](README.md) | 中文**
+
+## 概述
 
 用于管理搬瓦工（KiwiVM）VPS 的 Go SDK、CLI 和 MCP 服务器，支持命令行与编程方式访问大部分功能。
 

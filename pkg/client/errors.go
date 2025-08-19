@@ -4,17 +4,17 @@ import "fmt"
 
 // BWHError represents a BWH API error with structured information
 type BWHError struct {
-	Code                   int                     `json:"error"`
-	Message                string                  `json:"message"`
-	AdditionalErrorInfo    string                  `json:"additionalErrorInfo,omitempty"`
-	AdditionalLockingInfo  *AdditionalLockingInfo  `json:"additionalLockingInfo,omitempty"`
+	Code                  int                    `json:"error"`
+	Message               string                 `json:"message"`
+	AdditionalErrorInfo   string                 `json:"additionalErrorInfo,omitempty"`
+	AdditionalLockingInfo *AdditionalLockingInfo `json:"additionalLockingInfo,omitempty"`
 }
 
 // AdditionalLockingInfo contains detailed locking status information
 type AdditionalLockingInfo struct {
 	LastStatusUpdateSecondsAgo int    `json:"last_status_update_s_ago"`
-	CompletedPercent          int    `json:"completed_percent"`
-	FriendlyProgressMessage   string `json:"friendly_progress_message"`
+	CompletedPercent           int    `json:"completed_percent"`
+	FriendlyProgressMessage    string `json:"friendly_progress_message"`
 }
 
 // Error implements the error interface

@@ -15,7 +15,7 @@ func GetVersion() string {
 	if Version != "dev" && Version != "unknown" {
 		return Version
 	}
-	
+
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
 			switch setting.Key {
@@ -26,12 +26,12 @@ func GetVersion() string {
 				return setting.Value
 			}
 		}
-		
+
 		if info.Main.Version != "(devel)" && info.Main.Version != "" {
 			return info.Main.Version
 		}
 	}
-	
+
 	return Version
 }
 
@@ -39,7 +39,7 @@ func GetBuildTime() string {
 	if BuildTime != "unknown" {
 		return BuildTime
 	}
-	
+
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.time" {
@@ -47,7 +47,7 @@ func GetBuildTime() string {
 			}
 		}
 	}
-	
+
 	return BuildTime
 }
 
@@ -55,7 +55,7 @@ func GetCommitHash() string {
 	if CommitHash != "unknown" {
 		return CommitHash
 	}
-	
+
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.revision" {
@@ -63,7 +63,7 @@ func GetCommitHash() string {
 			}
 		}
 	}
-	
+
 	return CommitHash
 }
 

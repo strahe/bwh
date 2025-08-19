@@ -1,6 +1,12 @@
-# BWH
+# bwh
+
+[![CI](https://github.com/strahe/bwh/workflows/CI/badge.svg)](https://github.com/strahe/bwh/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/strahe/bwh)](https://goreportcard.com/report/github.com/strahe/bwh)
+[![Release](https://img.shields.io/github/v/release/strahe/bwh)](https://github.com/strahe/bwh/releases)
 
 > **English | [中文](README.zh.md)**
+
+## Overview
 
 Go SDK, CLI, and MCP server for managing BandwagonHost (KiwiVM) VPS, with command-line and programmatic access to most features.
 
@@ -127,7 +133,7 @@ Add to your `claude_desktop_config.json` file:
 }
 ```
 
- 
+
 
 #### Claude Code
 
@@ -135,7 +141,7 @@ Add to your `claude_desktop_config.json` file:
 claude mcp add bwh -- bwh mcp serve
 ```
 
- 
+
 
 #### Cursor
 
@@ -152,7 +158,7 @@ Add to your Cursor MCP configuration:
 }
 ```
 
- 
+
 
 #### Continue (VS Code Extension)
 
@@ -172,7 +178,7 @@ Add to your Continue configuration:
 }
 ```
 
- 
+
 
 ### Configuration Notes
 

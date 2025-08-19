@@ -8,9 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/strahe/bwh/pkg/client"
+	"gopkg.in/yaml.v3"
 )
 
 var (
