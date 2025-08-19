@@ -591,7 +591,7 @@ func downloadFile(ctx context.Context, downloadURL, filepath string, expectedSiz
 	
 	// For IP-based HTTPS URLs, use more permissive TLS settings
 	if skipTLSVerify {
-		tlsConfig.MinVersion = tls.VersionTLS10 // Support older TLS versions
+		tlsConfig.MinVersion = tls.VersionTLS12 // Only support secure TLS versions
 		tlsConfig.MaxVersion = tls.VersionTLS13 // Support newest TLS versions
 		tlsConfig.CipherSuites = nil           // Use default cipher suites
 	}
