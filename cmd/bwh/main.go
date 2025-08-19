@@ -9,7 +9,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-
 func main() {
 	cmd := &cli.Command{
 		Name:    "bwh",
@@ -46,6 +45,7 @@ func main() {
 			resetPasswordCmd,
 			snapshotCmd,
 			backupCmd,
+			migrateCmd,
 			ipv6Cmd,
 			mcpCmd,
 		},

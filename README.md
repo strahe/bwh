@@ -91,6 +91,8 @@ backups, err := c.ListBackups(ctx)
 
 **Backup & Recovery**: `CreateSnapshot`, `RestoreSnapshot`, `DeleteSnapshot`, backup management
 
+**Migration**: `GetMigrateLocations`, `StartMigration` (use `StartMigrationWithTimeout` for custom timeouts)
+
 **Network**: SSH key management, IP/reverse DNS configuration, IPv6 subnet management
 
 *Complete API reference*: View [pkg/client documentation](./pkg/client) or run `go doc github.com/strahe/bwh/pkg/client` for all available methods.
@@ -208,6 +210,7 @@ audit           Display audit log entries
 reset-password  Reset the root password
 snapshot        Manage VPS snapshots
 backup          Manage VPS backups
+migrate         Migrate VPS to another location (supports --wait/--timeout)
 ipv6            Manage IPv6 subnets (add, delete, list)
 mcp             Run MCP server for read-only BWH management
 ```

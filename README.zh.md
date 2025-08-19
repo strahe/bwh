@@ -91,6 +91,8 @@ backups, err := c.ListBackups(ctx)
 
 **备份和恢复**: `CreateSnapshot`、`RestoreSnapshot`、`DeleteSnapshot`、备份管理
 
+**迁移**: `GetMigrateLocations`、`StartMigration`（支持 `StartMigrationWithTimeout` 自定义超时）
+
 **网络**: SSH 密钥管理、IP/反向 DNS 配置、IPv6 子网管理
 
 *完整 API 参考*: 查看 [pkg/client 文档](./pkg/client) 或运行 `go doc github.com/strahe/bwh/pkg/client` 获取所有可用方法。
@@ -208,6 +210,7 @@ audit           显示审计日志条目
 reset-password  重置 root 密码
 snapshot        管理 VPS 快照
 backup          管理 VPS 备份
+migrate         迁移 VPS 至其他位置（支持 --wait/--timeout）
 ipv6            管理 IPv6 子网（添加、删除、列出）
 mcp             运行 MCP 服务器以进行只读 BWH 管理
 ```

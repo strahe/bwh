@@ -282,3 +282,19 @@ type IPv6AddResponse struct {
 	BaseResponse
 	AssignedSubnet string `json:"assigned_subnet"` // Newly assigned IPv6 /64 subnet
 }
+
+// MigrateLocationsResponse represents the response from migrate/getLocations API call
+type MigrateLocationsResponse struct {
+	BaseResponse
+	CurrentLocation         string            `json:"currentLocation"`         // Current VPS location ID
+	Locations               []string          `json:"locations"`               // All possible migration locations
+	Descriptions            map[string]string `json:"descriptions"`            // Map of location ID to human-readable description
+	DataTransferMultipliers map[string]int    `json:"dataTransferMultipliers"` // Map of location ID to data transfer multiplier
+}
+
+// MigrateStartResponse represents the response from migrate/start API call
+type MigrateStartResponse struct {
+	BaseResponse
+	NotificationEmail string   `json:"notificationEmail"` // E-mail where completion notification will be sent
+	NewIPs            []string `json:"newIps"`            // New IP addresses assigned to the VPS
+}

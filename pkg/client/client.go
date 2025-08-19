@@ -391,6 +391,81 @@ func (c *Client) UnmountISO(ctx context.Context) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
+// GetMigrateLocations returns all possible migration locations and metadata
+func (c *Client) GetMigrateLocations(ctx context.Context) (*MigrateLocationsResponse, error) {
+	var resp MigrateLocationsResponse
+	if err := c.doRequest(ctx, "migrate/getLocations", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
+// StartMigration starts VPS migration to a new location with a default 15-minute timeout
+// NOTE: Starting migration will replace all IPv4 addresses of the VPS
+func (c *Client) StartMigration(ctx context.Context, locationID string) (*MigrateStartResponse, error) {
+	return c.StartMigrationWithTimeout(ctx, locationID, 15*time.Minute)
+}
+
+// StartMigrationWithTimeout starts VPS migration to a new location with a custom timeout
+// NOTE: Starting migration will replace all IPv4 addresses of the VPS
+func (c *Client) StartMigrationWithTimeout(ctx context.Context, locationID string, timeout time.Duration) (*MigrateStartResponse, error) {
+	params := map[string]string{
+		"location": locationID,
+	}
+	var resp MigrateStartResponse
+	if err := c.doRequestWithTimeout(ctx, "migrate/start", params, &resp, timeout); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
+// doRequestWithTimeout performs a generic API request using a custom timeout for long-running operations
+func (c *Client) doRequestWithTimeout(ctx context.Context, endpoint string, params map[string]string, result any, timeout time.Duration) error {
+	u, err := url.Parse(c.baseURL + "/" + endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("veid", c.veid)
+	q.Set("api_key", c.apiKey)
+
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+
+	// Apply context deadline as well as client timeout
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctxWithTimeout, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", version.GetUserAgent())
+
+	customClient := &http.Client{Timeout: timeout}
+	resp, err := customClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API request failed with status: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return nil
+}
 
 // wrapError wraps a response with error checking - returns (result, error)
 func wrapError[T any](resp T, errorCode int, message string) (T, error) {
