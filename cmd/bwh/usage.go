@@ -65,7 +65,7 @@ var usageCmd = &cli.Command{
 		if summaryOnly {
 			displayUsageSummary(usageStats, resolvedName, len(displayData), period)
 		} else if compact {
-			displayCompactUsageCharts(usageStats, resolvedName, displayData, period)
+			displayCompactUsage(usageStats, resolvedName, displayData, period)
 		} else {
 			displayDetailedUsageCharts(resolvedName, displayData)
 		}
@@ -168,8 +168,8 @@ func displayDetailedUsageCharts(instanceName string, data []client.UsageDataPoin
 		formatBytes(int64(sum(diskWriteData)*1024)), formatDiskRate(avgWritePerSec, "KB"))
 }
 
-func displayCompactUsageCharts(stats *client.UsageStatsResponse, instanceName string, data []client.UsageDataPoint, period string) {
-	fmt.Printf("\nUsage Trends: %s (%s)\n", instanceName, stats.VMType)
+func displayCompactUsage(stats *client.UsageStatsResponse, instanceName string, data []client.UsageDataPoint, period string) {
+	fmt.Printf("\nUsage Summary: %s (%s)\n", instanceName, stats.VMType)
 	fmt.Printf("├─ %d data points (period: %s)", len(data), period)
 
 	if len(data) > 1 {
@@ -182,58 +182,39 @@ func displayCompactUsageCharts(stats *client.UsageStatsResponse, instanceName st
 		fmt.Printf("\n")
 	}
 
-	// CPU mini-chart
-	fmt.Printf("├─ CPU Usage:\n")
+	// CPU usage stats (no chart)
 	cpuData := make([]float64, len(data))
 	for i, point := range data {
 		cpuData[i] = float64(point.CPUUsage)
 	}
 
-	if len(cpuData) > 1 {
-		cpuGraph := asciigraph.Plot(cpuData, asciigraph.Height(4), asciigraph.Width(50))
-		fmt.Printf("│  %s\n", cpuGraph)
-		fmt.Printf("│  Range: %.0f%% - %.0f%% (avg: %.1f%%)\n",
+	if len(cpuData) > 0 {
+		fmt.Printf("├─ CPU Usage: %.0f%% - %.0f%% (avg: %.1f%%)\n",
 			min(cpuData), max(cpuData), avg(cpuData))
 	}
 
-	// Network mini-chart (combined)
-	fmt.Printf("├─ Network (combined in+out):\n")
-	netData := make([]float64, len(data))
+	// Network traffic stats (no chart)
 	totalNetIn, totalNetOut := float64(0), float64(0)
-
-	for i, point := range data {
-		netIn := float64(point.NetworkInBytes) / 1024 / 1024
-		netOut := float64(point.NetworkOutBytes) / 1024 / 1024
-		netData[i] = netIn + netOut
-		totalNetIn += netIn
-		totalNetOut += netOut
+	for _, point := range data {
+		totalNetIn += float64(point.NetworkInBytes) / 1024 / 1024
+		totalNetOut += float64(point.NetworkOutBytes) / 1024 / 1024
 	}
 
-	if len(netData) > 1 {
-		netGraph := asciigraph.Plot(netData, asciigraph.Height(4), asciigraph.Width(50))
-		fmt.Printf("│  %s\n", netGraph)
-		fmt.Printf("│  Total: %s in + %s out\n",
+	if len(data) > 0 {
+		fmt.Printf("├─ Network: %s in + %s out\n",
 			formatBytes(int64(totalNetIn*1024*1024)),
 			formatBytes(int64(totalNetOut*1024*1024)))
 	}
 
-	// Disk mini-chart (combined read+write)
-	fmt.Printf("└─ Disk I/O (combined read+write):\n")
-	diskData := make([]float64, len(data))
+	// Disk I/O stats (no chart)
 	totalDiskRead, totalDiskWrite := float64(0), float64(0)
-
-	for i, point := range data {
-		diskRead := float64(point.DiskReadBytes) / 1024
-		diskWrite := float64(point.DiskWriteBytes) / 1024
-		diskData[i] = diskRead + diskWrite
-		totalDiskRead += diskRead
-		totalDiskWrite += diskWrite
+	for _, point := range data {
+		totalDiskRead += float64(point.DiskReadBytes) / 1024
+		totalDiskWrite += float64(point.DiskWriteBytes) / 1024
 	}
 
-	if len(diskData) > 1 {
-		diskGraph := asciigraph.Plot(diskData, asciigraph.Height(4), asciigraph.Width(50))
-		fmt.Printf("   %s\n", diskGraph)
-		fmt.Printf("   Total: %s read + %s write\n",
+	if len(data) > 0 {
+		fmt.Printf("└─ Disk I/O: %s read + %s write\n",
 			formatBytes(int64(totalDiskRead*1024)),
 			formatBytes(int64(totalDiskWrite*1024)))
 	}
