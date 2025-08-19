@@ -3,8 +3,6 @@
 [![CI](https://github.com/strahe/bwh/workflows/CI/badge.svg)](https://github.com/strahe/bwh/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/strahe/bwh)](https://goreportcard.com/report/github.com/strahe/bwh)
 [![Release](https://img.shields.io/github/v/release/strahe/bwh)](https://github.com/strahe/bwh/releases)
-[![GoDoc](https://godoc.org/github.com/strahe/bwh?status.svg)](https://godoc.org/github.com/strahe/bwh)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **[English](README.md) | 中文**
 
