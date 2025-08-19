@@ -3,9 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/urfave/cli/v3"
 )
+
+func generateRandomFileName() string {
+	chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, 8)
+	for i := range result {
+		result[i] = chars[rand.Intn(len(chars))]
+	}
+	return fmt.Sprintf("password_%s.txt", string(result))
+}
 
 var resetPasswordCmd = &cli.Command{
 	Name:  "reset-password",
@@ -16,9 +29,15 @@ var resetPasswordCmd = &cli.Command{
 			Usage:   "skip confirmation prompt",
 			Aliases: []string{"y"},
 		},
+		&cli.StringFlag{
+			Name:    "output",
+			Usage:   "output password to specified file (creates random file if not specified)",
+			Aliases: []string{"o"},
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		skipConfirm := cmd.Bool("yes")
+		outputFile := cmd.String("output")
 
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
@@ -32,6 +51,17 @@ var resetPasswordCmd = &cli.Command{
 			}
 		}
 
+		var filePath string
+		if outputFile == "" {
+			filePath = generateRandomFileName()
+		} else {
+			filePath = outputFile
+		}
+		absPath, err := filepath.Abs(filePath)
+		if err != nil {
+			absPath = filePath
+		}
+
 		fmt.Printf("Resetting root password for instance: %s\n", resolvedName)
 
 		result, err := bwhClient.ResetRootPassword(ctx)
@@ -39,11 +69,17 @@ var resetPasswordCmd = &cli.Command{
 			return fmt.Errorf("failed to reset root password: %w", err)
 		}
 
+		passwordContent := fmt.Sprintf("Root Password for BWH Instance: %s\n", resolvedName)
+		passwordContent += fmt.Sprintf("Generated at: %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
+		passwordContent += fmt.Sprintf("Password: %s\n", result.Password)
+
+		err = os.WriteFile(filePath, []byte(passwordContent), 0600)
+		if err != nil {
+			return fmt.Errorf("failed to write password to file: %w", err)
+		}
+
 		fmt.Printf("\n✅ Root password reset successfully!\n")
-		fmt.Printf("\n🔑 NEW ROOT PASSWORD: %s\n", result.Password)
-		fmt.Printf("\n🔒 IMPORTANT: Please save this password securely!\n")
-		fmt.Printf("   This password will not be shown again.\n")
-		fmt.Printf("\n💡 To set a custom password, use SSH or the Interactive Root Shell.\n")
+		fmt.Printf("🔑 Password saved to: %s\n", absPath)
 
 		return nil
 	},
