@@ -8,8 +8,10 @@ import (
 
 // BaseResponse represents the base response structure for API calls
 type BaseResponse struct {
-	Error   int    `json:"error"`
-	Message string `json:"message,omitempty"`
+	Error                 int                    `json:"error"`
+	Message               string                 `json:"message,omitempty"`
+	AdditionalErrorInfo   string                 `json:"additionalErrorInfo,omitempty"`
+	AdditionalLockingInfo *AdditionalLockingInfo `json:"additionalLockingInfo,omitempty"`
 }
 
 // ServiceInfo represents the complete BWH VPS service information

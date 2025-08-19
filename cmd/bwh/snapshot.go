@@ -44,6 +44,11 @@ var snapshotCreateCmd = &cli.Command{
 			Aliases: []string{"d"},
 			Usage:   "description for the snapshot",
 		},
+		&cli.BoolFlag{
+			Name:    "yes",
+			Aliases: []string{"y"},
+			Usage:   "skip confirmation prompt",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		bwhClient, resolvedName, err := createBWHClient(cmd)
@@ -51,12 +56,28 @@ var snapshotCreateCmd = &cli.Command{
 			return err
 		}
 
-		fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
-
 		description := cmd.String("description")
 		if description == "" {
 			description = fmt.Sprintf("Created via bwh CLI on %s", time.Now().Format("2006-01-02 15:04:05"))
 		}
+
+		if !cmd.Bool("yes") {
+			fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
+			fmt.Printf("Description: %s\n", description)
+			fmt.Printf("\n⚠️  WARNING: This operation will create a snapshot of the current VPS state.\n")
+			fmt.Printf("The VPS will be AUTOMATICALLY RESTARTED and temporarily locked during snapshot creation.\n")
+			fmt.Printf("All running processes will be terminated and services will be interrupted.\n")
+			confirmed, err := promptConfirmation("Continue with snapshot creation and VPS restart?")
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				fmt.Printf("Operation cancelled\n")
+				return nil
+			}
+		}
+
+		fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
 		resp, err := bwhClient.CreateSnapshot(ctx, description)
 		if err != nil {
 			return fmt.Errorf("failed to create snapshot: %w", err)
@@ -403,9 +424,9 @@ var snapshotDownloadCmd = &cli.Command{
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 
-		// Download the file
+		// Download the file with fallback
 		fmt.Printf("\n🔽 Starting download...\n")
-		if err := downloadFile(ctx, downloadURL, outputPath, targetSnapshot.Size.Value); err != nil {
+		if err := downloadFileWithFallback(ctx, targetSnapshot, outputPath); err != nil {
 			return fmt.Errorf("download failed: %w", err)
 		}
 
@@ -528,17 +549,60 @@ func isPrintableASCII(s string) bool {
 	return true
 }
 
+// downloadFileWithFallback attempts to download using HTTPS first, then falls back to HTTP
+func downloadFileWithFallback(ctx context.Context, snapshot *client.SnapshotInfo, outputPath string) error {
+	// Try HTTPS first if available
+	if snapshot.DownloadLinkSSL != "" {
+		fmt.Printf("🔒 Attempting HTTPS download...\n")
+		err := downloadFile(ctx, snapshot.DownloadLinkSSL, outputPath, snapshot.Size.Value)
+		if err == nil {
+			return nil
+		}
+		
+		// Check if it's a TLS-related error
+		if strings.Contains(err.Error(), "tls:") || strings.Contains(err.Error(), "handshake") {
+			fmt.Printf("⚠️  HTTPS download failed due to TLS issues: %v\n", err)
+			if snapshot.DownloadLink != "" {
+				fmt.Printf("🔄 Falling back to HTTP download...\n")
+				return downloadFile(ctx, snapshot.DownloadLink, outputPath, snapshot.Size.Value)
+			}
+		}
+		return err
+	}
+	
+	// Only HTTP available
+	if snapshot.DownloadLink != "" {
+		fmt.Printf("📡 Using HTTP download (HTTPS not available)\n")
+		return downloadFile(ctx, snapshot.DownloadLink, outputPath, snapshot.Size.Value)
+	}
+	
+	return fmt.Errorf("no download links available")
+}
+
 // downloadFile downloads a file from URL with progress indication
 func downloadFile(ctx context.Context, downloadURL, filepath string, expectedSize int64) error {
 	// Check if we need to disable TLS verification for IP-based HTTPS URLs
 	skipTLSVerify := shouldSkipTLSVerify(downloadURL)
 
 	// Create HTTP client with appropriate TLS settings
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: skipTLSVerify,
+	}
+	
+	// For IP-based HTTPS URLs, use more permissive TLS settings
+	if skipTLSVerify {
+		tlsConfig.MinVersion = tls.VersionTLS10 // Support older TLS versions
+		tlsConfig.MaxVersion = tls.VersionTLS13 // Support newest TLS versions
+		tlsConfig.CipherSuites = nil           // Use default cipher suites
+	}
+	
 	client := &http.Client{
+		Timeout: 30 * time.Minute, // Set a reasonable timeout for large downloads
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: skipTLSVerify,
-			},
+			TLSClientConfig:     tlsConfig,
+			DisableCompression:  true, // Avoid compression for large files
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 30 * time.Second,
 		},
 	}
 

@@ -48,7 +48,7 @@ func (c *Client) GetServiceInfo(ctx context.Context) (*ServiceInfo, error) {
 		return nil, err
 	}
 
-	return wrapError(&serviceInfo, serviceInfo.Error, serviceInfo.Message)
+	return wrapErrorWithBase(&serviceInfo, serviceInfo.BaseResponse)
 }
 
 // GetLiveServiceInfo gets real-time information about the server including detailed VPS status
@@ -59,7 +59,7 @@ func (c *Client) GetLiveServiceInfo(ctx context.Context) (*LiveServiceInfo, erro
 		return nil, err
 	}
 
-	return wrapError(&liveServiceInfo, liveServiceInfo.Error, liveServiceInfo.Message)
+	return wrapErrorWithBase(&liveServiceInfo, liveServiceInfo.BaseResponse)
 }
 
 // CreateSnapshot creates a snapshot with optional description
@@ -74,7 +74,7 @@ func (c *Client) CreateSnapshot(ctx context.Context, description string) (*Creat
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // ListSnapshots gets the list of snapshots
@@ -84,7 +84,7 @@ func (c *Client) ListSnapshots(ctx context.Context) (*SnapshotListResponse, erro
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // DeleteSnapshot deletes a snapshot by fileName
@@ -94,7 +94,7 @@ func (c *Client) DeleteSnapshot(ctx context.Context, fileName string) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // RestoreSnapshot restores a snapshot by fileName (overwrites all data on VPS)
@@ -104,7 +104,7 @@ func (c *Client) RestoreSnapshot(ctx context.Context, fileName string) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // ToggleSnapshotSticky sets or removes sticky attribute for a snapshot
@@ -122,7 +122,7 @@ func (c *Client) ToggleSnapshotSticky(ctx context.Context, fileName string, stic
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // ExportSnapshot generates a token for transferring snapshot to another instance
@@ -132,7 +132,7 @@ func (c *Client) ExportSnapshot(ctx context.Context, fileName string) (*Snapshot
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // ImportSnapshot imports a snapshot from another instance using VEID and token
@@ -145,7 +145,7 @@ func (c *Client) ImportSnapshot(ctx context.Context, sourceVeid, sourceToken str
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // Restart restarts the VPS
@@ -155,7 +155,7 @@ func (c *Client) Restart(ctx context.Context) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // Start starts the VPS
@@ -165,7 +165,7 @@ func (c *Client) Start(ctx context.Context) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // Stop stops the VPS
@@ -175,7 +175,7 @@ func (c *Client) Stop(ctx context.Context) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // Kill forcefully stops a VPS that is stuck and cannot be stopped by normal means
@@ -186,7 +186,7 @@ func (c *Client) Kill(ctx context.Context) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // GetAvailableOS gets the list of available operating systems for reinstallation
@@ -196,7 +196,7 @@ func (c *Client) GetAvailableOS(ctx context.Context) (*AvailableOSResponse, erro
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // ReinstallOS reinstalls the operating system
@@ -207,7 +207,7 @@ func (c *Client) ReinstallOS(ctx context.Context, osTemplate string) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // GetRawUsageStats gets detailed usage statistics
@@ -217,7 +217,7 @@ func (c *Client) GetRawUsageStats(ctx context.Context) (*UsageStatsResponse, err
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // GetAuditLog gets audit log entries for the VPS
@@ -227,7 +227,7 @@ func (c *Client) GetAuditLog(ctx context.Context) (*AuditLogResponse, error) {
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // ResetRootPassword resets the root password and returns the new password
@@ -237,7 +237,7 @@ func (c *Client) ResetRootPassword(ctx context.Context) (*ResetRootPasswordRespo
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // doRequest performs a generic API request
@@ -288,7 +288,7 @@ func (c *Client) ListBackups(ctx context.Context) (*BackupListResponse, error) {
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // CopyBackupToSnapshot copies a backup to a restorable snapshot
@@ -300,7 +300,7 @@ func (c *Client) CopyBackupToSnapshot(ctx context.Context, backupToken string) e
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // SetHostname sets a new hostname for the VPS
@@ -312,7 +312,7 @@ func (c *Client) SetHostname(ctx context.Context, newHostname string) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // GetRateLimitStatus gets current API rate limit status
@@ -322,7 +322,7 @@ func (c *Client) GetRateLimitStatus(ctx context.Context) (*RateLimitStatus, erro
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // GetSshKeys gets SSH keys from both Hypervisor Vault and Billing Portal
@@ -332,7 +332,7 @@ func (c *Client) GetSshKeys(ctx context.Context) (*SshKeysResponse, error) {
 		return nil, err
 	}
 
-	return wrapError(&resp, resp.Error, resp.Message)
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
 // UpdateSshKeys updates per-VM SSH keys in Hypervisor Vault (replaces all existing keys)
@@ -351,7 +351,7 @@ func (c *Client) UpdateSshKeys(ctx context.Context, sshKeys []string) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // SetPTR sets new PTR (rDNS) record for IP address
@@ -364,7 +364,7 @@ func (c *Client) SetPTR(ctx context.Context, ip, ptr string) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // MountISO sets ISO image to boot from
@@ -377,7 +377,7 @@ func (c *Client) MountISO(ctx context.Context, iso string) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 // UnmountISO removes ISO image and configures VM to boot from primary storage
@@ -388,7 +388,7 @@ func (c *Client) UnmountISO(ctx context.Context) error {
 		return err
 	}
 
-	return wrapOnlyError(resp.Error, resp.Message)
+	return wrapOnlyErrorFromBase(resp)
 }
 
 
@@ -404,12 +404,39 @@ func wrapError[T any](resp T, errorCode int, message string) (T, error) {
 	return resp, nil
 }
 
+// wrapErrorWithBase wraps a response with error checking using BaseResponse - returns (result, error)
+func wrapErrorWithBase[T any](resp T, base BaseResponse) (T, error) {
+	if base.Error != 0 {
+		var zero T
+		return zero, &BWHError{
+			Code:                  base.Error,
+			Message:               base.Message,
+			AdditionalErrorInfo:   base.AdditionalErrorInfo,
+			AdditionalLockingInfo: base.AdditionalLockingInfo,
+		}
+	}
+	return resp, nil
+}
+
 // wrapOnlyError wraps a response with error checking - returns only error
 func wrapOnlyError(errorCode int, message string) error {
 	if errorCode != 0 {
 		return &BWHError{
 			Code:    errorCode,
 			Message: message,
+		}
+	}
+	return nil
+}
+
+// wrapOnlyErrorFromBase wraps a response with error checking using BaseResponse - returns only error
+func wrapOnlyErrorFromBase(base BaseResponse) error {
+	if base.Error != 0 {
+		return &BWHError{
+			Code:                  base.Error,
+			Message:               base.Message,
+			AdditionalErrorInfo:   base.AdditionalErrorInfo,
+			AdditionalLockingInfo: base.AdditionalLockingInfo,
 		}
 	}
 	return nil

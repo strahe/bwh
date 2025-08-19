@@ -7,10 +7,12 @@ import (
 
 func TestBWHError(t *testing.T) {
 	tests := []struct {
-		name     string
-		code     int
-		message  string
-		expected string
+		name                  string
+		code                  int
+		message               string
+		additionalErrorInfo   string
+		additionalLockingInfo *AdditionalLockingInfo
+		expected              string
 	}{
 		{
 			name:     "error with message",
@@ -30,13 +32,39 @@ func TestBWHError(t *testing.T) {
 			message:  "",
 			expected: "BWH API error 0",
 		},
+		{
+			name:                "locked error with additional info",
+			code:                788888,
+			message:             "VE is currently locked, try again in a few minutes",
+			additionalErrorInfo: "OS Reinstall: debian-13-x86_64",
+			additionalLockingInfo: &AdditionalLockingInfo{
+				LastStatusUpdateSecondsAgo: 19,
+				CompletedPercent:           80,
+				FriendlyProgressMessage:    "Starting VM",
+			},
+			expected: "BWH API error 788888: VE is currently locked, try again in a few minutes\nOperation: OS Reinstall: debian-13-x86_64\nProgress: 80% complete - Starting VM (updated 19s ago)",
+		},
+		{
+			name:                "locked error without time update",
+			code:                788888,
+			message:             "VE is currently locked, try again in a few minutes",
+			additionalErrorInfo: "Snapshot Creation",
+			additionalLockingInfo: &AdditionalLockingInfo{
+				LastStatusUpdateSecondsAgo: 0,
+				CompletedPercent:           45,
+				FriendlyProgressMessage:    "Creating snapshot",
+			},
+			expected: "BWH API error 788888: VE is currently locked, try again in a few minutes\nOperation: Snapshot Creation\nProgress: 45% complete - Creating snapshot",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := &BWHError{
-				Code:    tt.code,
-				Message: tt.message,
+				Code:                  tt.code,
+				Message:               tt.message,
+				AdditionalErrorInfo:   tt.additionalErrorInfo,
+				AdditionalLockingInfo: tt.additionalLockingInfo,
 			}
 			
 			if err.Error() != tt.expected {
@@ -84,8 +112,20 @@ func TestBWHErrorHelpers(t *testing.T) {
 		t.Error("Expected IsAuthenticationError to return false for non-BWH error")
 	}
 	
-	// Note: Only test IsAuthenticationError since it's the only one we have verified data for
-	// Other error type functions (NotFound, RateLimit) would need actual BWH API error data to be reliable
+	// Test IsLockedError
+	lockedErr := &BWHError{Code: 788888, Message: "VE is currently locked, try again in a few minutes"}
+	
+	if !IsLockedError(lockedErr) {
+		t.Error("Expected IsLockedError to return true for locked error")
+	}
+	
+	if IsLockedError(otherErr) {
+		t.Error("Expected IsLockedError to return false for non-locked error")
+	}
+	
+	if IsLockedError(normalErr) {
+		t.Error("Expected IsLockedError to return false for non-BWH error")
+	}
 }
 
 func TestWrapError(t *testing.T) {
@@ -187,5 +227,30 @@ func TestClient_StructuredErrors_Mock(t *testing.T) {
 	expectedMsg := "BWH API error 700005: Authentication failure"
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
+
+func TestEnhancedErrorDisplay(t *testing.T) {
+	// Test enhanced error display with mock locked error data
+	lockedError := &BWHError{
+		Code:                788888,
+		Message:             "VE is currently locked, try again in a few minutes",
+		AdditionalErrorInfo: "OS Reinstall: debian-13-x86_64",
+		AdditionalLockingInfo: &AdditionalLockingInfo{
+			LastStatusUpdateSecondsAgo: 19,
+			CompletedPercent:          80,
+			FriendlyProgressMessage:    "Starting VM",
+		},
+	}
+
+	expectedMsg := "BWH API error 788888: VE is currently locked, try again in a few minutes\nOperation: OS Reinstall: debian-13-x86_64\nProgress: 80% complete - Starting VM (updated 19s ago)"
+	
+	if lockedError.Error() != expectedMsg {
+		t.Errorf("Expected enhanced error message:\n%s\n\nGot:\n%s", expectedMsg, lockedError.Error())
+	}
+
+	// Verify IsLockedError works correctly
+	if !IsLockedError(lockedError) {
+		t.Error("Expected IsLockedError to return true for locked error")
 	}
 }
