@@ -12,7 +12,7 @@ BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S_UTC')
 COMMIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Build flags
-LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.CommitHash=$(COMMIT_HASH) -w -s"
+LDFLAGS := -ldflags "-X github.com/strahe/bwh/internal/version.Version=$(VERSION) -X github.com/strahe/bwh/internal/version.BuildTime=$(BUILD_TIME) -X github.com/strahe/bwh/internal/version.CommitHash=$(COMMIT_HASH) -w -s"
 BUILD_FLAGS := -trimpath
 
 # Cross-compilation targets

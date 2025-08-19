@@ -5,21 +5,16 @@ import (
 	"log"
 	"os"
 
+	"github.com/strahe/bwh/internal/version"
 	"github.com/urfave/cli/v3"
 )
 
-// Version information (set by build)
-var (
-	Version    = "dev"
-	BuildTime  = "unknown"
-	CommitHash = "unknown"
-)
 
 func main() {
 	cmd := &cli.Command{
 		Name:    "bwh",
 		Usage:   "manage your BWH instances",
-		Version: Version,
+		Version: version.GetVersion(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "config",

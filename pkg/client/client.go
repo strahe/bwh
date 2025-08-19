@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/strahe/bwh/internal/version"
 )
 
 const (
@@ -260,7 +262,7 @@ func (c *Client) doRequest(ctx context.Context, endpoint string, params map[stri
 	}
 
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "BWH-Client/1.0")
+	req.Header.Set("User-Agent", version.GetUserAgent())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
