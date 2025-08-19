@@ -47,6 +47,7 @@ func main() {
 			backupCmd,
 			migrateCmd,
 			ipv6Cmd,
+			privateIPCmd,
 			mcpCmd,
 		},
 	}

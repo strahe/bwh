@@ -31,6 +31,7 @@ bwh iso images                        # 列出可用 ISO 镜像
 bwh iso mount ubuntu-20.04.iso        # 挂载 ISO 用于救援/安装
 bwh ipv6 add                          # 分配新的 IPv6 /64 子网
 bwh ipv6 list                         # 列出 IPv6 子网
+bwh pi info                           # 显示私有 IPv4 信息（等同 `private-ip info`）
 bwh connect                           # SSH 连接
 
 # 探索更多命令: bwh --help
@@ -93,7 +94,7 @@ backups, err := c.ListBackups(ctx)
 
 **迁移**: `GetMigrateLocations`、`StartMigration`（支持 `StartMigrationWithTimeout` 自定义超时）
 
-**网络**: SSH 密钥管理、IP/反向 DNS 配置、IPv6 子网管理
+**网络**: SSH 密钥管理、IP/反向 DNS 配置、IPv6 子网管理、私有 IPv4 管理
 
 *完整 API 参考*: 查看 [pkg/client 文档](./pkg/client) 或运行 `go doc github.com/strahe/bwh/pkg/client` 获取所有可用方法。
 
@@ -212,6 +213,7 @@ snapshot        管理 VPS 快照
 backup          管理 VPS 备份
 migrate         迁移 VPS 至其他位置（支持 --wait/--timeout）
 ipv6            管理 IPv6 子网（添加、删除、列出）
+private-ip (pi) 管理私有 IPv4 地址（info、available、assign、delete）
 mcp             运行 MCP 服务器以进行只读 BWH 管理
 ```
 

@@ -26,7 +26,7 @@ Common commands:
   - `control.go` - VPS control commands (start, stop, restart, kill, hostname, set-ptr)
   - `info.go` - VPS information display (detailed/compact formats)
   - `node.go` - Multi-instance configuration management
-  - `snapshot.go`, `backup.go`, `usage.go`, `audit.go`, `iso.go`, etc. - Feature-specific commands
+  - `snapshot.go`, `backup.go`, `usage.go`, `audit.go`, `iso.go`, `private_ip.go`, etc. - Feature-specific commands
   - `mcp.go` - MCP server command
 - `pkg/client/` - Public API client library
   - `client.go` - BWH API client with comprehensive VPS management methods
@@ -119,7 +119,7 @@ Example of good comment:
 ```go
 // FlexibleInt handles inconsistent BWH API responses that return
 // numeric values as both strings and integers
-type FlexibleInt struct {
-    Value int64
-}
+// type FlexibleInt struct {
+//     Value int64
+// }
 ```

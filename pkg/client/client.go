@@ -540,3 +540,42 @@ func (c *Client) DeleteIPv6(ctx context.Context, subnet string) error {
 
 	return wrapOnlyErrorFromBase(resp)
 }
+
+// GetAvailablePrivateIPs returns all available private IPv4 addresses that can be assigned
+func (c *Client) GetAvailablePrivateIPs(ctx context.Context) (*PrivateIPAvailableResponse, error) {
+	var resp PrivateIPAvailableResponse
+	if err := c.doRequest(ctx, "privateIp/getAvailableIps", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
+// AssignPrivateIP assigns a private IPv4 address; if ip is empty, a random one will be assigned
+func (c *Client) AssignPrivateIP(ctx context.Context, ip string) (*PrivateIPAssignResponse, error) {
+	params := map[string]string{}
+	if strings.TrimSpace(ip) != "" {
+		params["ip"] = ip
+	}
+
+	var resp PrivateIPAssignResponse
+	if err := c.doRequest(ctx, "privateIp/assign", params, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
+// DeletePrivateIP deletes a private IPv4 address
+func (c *Client) DeletePrivateIP(ctx context.Context, ip string) error {
+	params := map[string]string{
+		"ip": ip,
+	}
+
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "privateIp/delete", params, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyErrorFromBase(resp)
+}

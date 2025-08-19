@@ -283,6 +283,18 @@ type IPv6AddResponse struct {
 	AssignedSubnet string `json:"assigned_subnet"` // Newly assigned IPv6 /64 subnet
 }
 
+// PrivateIPAvailableResponse represents the response from privateIp/getAvailableIps API call
+type PrivateIPAvailableResponse struct {
+	BaseResponse
+	AvailableIPs []string `json:"available_ips"` // Array of available private IPv4 addresses
+}
+
+// PrivateIPAssignResponse represents the response from privateIp/assign API call
+type PrivateIPAssignResponse struct {
+	BaseResponse
+	AssignedIPs []string `json:"assigned_ips"` // Array of successfully assigned private IPv4 addresses
+}
+
 // MigrateLocationsResponse represents the response from migrate/getLocations API call
 type MigrateLocationsResponse struct {
 	BaseResponse

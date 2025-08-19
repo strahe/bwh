@@ -31,6 +31,7 @@ bwh iso images                        # List available ISO images
 bwh iso mount ubuntu-20.04.iso        # Mount ISO for rescue/install
 bwh ipv6 add                          # Assign new IPv6 /64 subnet
 bwh ipv6 list                         # List IPv6 subnets
+bwh pi info                           # Show private IPv4 info (alias of `private-ip info`)
 bwh connect                           # SSH connection
 
 # Explore more commands: bwh --help
@@ -93,7 +94,7 @@ backups, err := c.ListBackups(ctx)
 
 **Migration**: `GetMigrateLocations`, `StartMigration` (use `StartMigrationWithTimeout` for custom timeouts)
 
-**Network**: SSH key management, IP/reverse DNS configuration, IPv6 subnet management
+**Network**: SSH key management, IP/reverse DNS configuration, IPv6 subnet management, private IPv4 management
 
 *Complete API reference*: View [pkg/client documentation](./pkg/client) or run `go doc github.com/strahe/bwh/pkg/client` for all available methods.
 
@@ -212,6 +213,7 @@ snapshot        Manage VPS snapshots
 backup          Manage VPS backups
 migrate         Migrate VPS to another location (supports --wait/--timeout)
 ipv6            Manage IPv6 subnets (add, delete, list)
+private-ip (pi) Manage Private IPv4 addresses (info, available, assign, delete)
 mcp             Run MCP server for read-only BWH management
 ```
 
