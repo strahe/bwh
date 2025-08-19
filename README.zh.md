@@ -6,7 +6,7 @@
 
 ## 安装
 
-前置条件：Go 1.21+；KiwiVM VEID 与 API Key。
+前置条件：Go 1.24+；KiwiVM VEID 与 API Key。
 
 ```bash
 # CLI 或者 MCP

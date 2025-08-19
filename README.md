@@ -6,7 +6,7 @@ Go SDK, CLI, and MCP server for managing BandwagonHost (KiwiVM) VPS, with comman
 
 ## Installation
 
-Prerequisites: Go 1.21+; KiwiVM VEID and API key.
+Prerequisites: Go 1.24+; KiwiVM VEID and API key.
 
 ```bash
 # CLI or MCP

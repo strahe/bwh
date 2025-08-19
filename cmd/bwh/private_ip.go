@@ -207,13 +207,6 @@ var privateIPDeleteCmd = &cli.Command{
 	},
 }
 
-// display helper for possible reuse; currently not used besides inline prints
-func displayPrivateIPs(title string, ips []string, instanceName string) {
-	fmt.Printf("\n📋 %s (%d)\n", title, len(ips))
-	for i, ip := range ips {
-		fmt.Printf("   %d. %s\n", i+1, ip)
-	}
-}
 
 // yesNo converts a boolean to user-friendly Yes/No string
 func yesNo(b bool) string {
