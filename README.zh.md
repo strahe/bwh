@@ -35,10 +35,14 @@ bwh usage --period 7d                 # 检查使用统计
 bwh snapshot create "备份名称"         # 创建快照
 bwh iso images                        # 列出可用 ISO 镜像
 bwh iso mount ubuntu-20.04.iso        # 挂载 ISO 用于救援/安装
-bwh ipv6 add                          # 分配新的 IPv6 /64 子网
+bwh ipv6 add                          # 分配新的 IPv6 /64 subnet
 bwh ipv6 list                         # 列出 IPv6 子网
 bwh pi info                           # 显示私有 IPv4 信息（等同 `private-ip info`）
 bwh connect                           # SSH 连接
+
+# 保持 BWH CLI 最新
+bwh update                            # 检查并安装更新
+bwh update --check                    # 仅检查更新
 
 # 探索更多命令: bwh --help
 ```
@@ -222,6 +226,7 @@ migrate         迁移 VPS 至其他位置（支持 --wait/--timeout）
 ipv6            管理 IPv6 子网（添加、删除、列出）
 private-ip (pi) 管理私有 IPv4 地址（info、available、assign、delete）
 mcp             运行 MCP 服务器以进行只读 BWH 管理
+update          检查更新并将 BWH CLI 更新到最新版本
 ```
 
 使用 `bwh <command> --help` 查看每个命令的详细选项和用法示例。

@@ -40,6 +40,10 @@ bwh ipv6 list                         # List IPv6 subnets
 bwh pi info                           # Show private IPv4 info (alias of `private-ip info`)
 bwh connect                           # SSH connection
 
+# Keep BWH CLI up to date
+bwh update                            # Check and install updates
+bwh update --check                    # Only check for updates
+
 # Explore more commands: bwh --help
 ```
 
@@ -222,6 +226,7 @@ migrate         Migrate VPS to another location (supports --wait/--timeout)
 ipv6            Manage IPv6 subnets (add, delete, list)
 private-ip (pi) Manage Private IPv4 addresses (info, available, assign, delete)
 mcp             Run MCP server for read-only BWH management
+update          Check for updates and update BWH CLI to the latest version
 ```
 
 Use `bwh <command> --help` to view detailed options and usage examples for each command.
