@@ -49,6 +49,7 @@ func main() {
 			ipv6Cmd,
 			privateIPCmd,
 			mcpCmd,
+			updateCmd,
 		},
 	}
 
