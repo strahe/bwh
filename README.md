@@ -188,6 +188,7 @@ Add to your Continue configuration:
 
 ### Available MCP Tools (Read-only)
 
+- **instance_list**: List all configured instances with metadata (no parameters)
 - **vps_info_get**: Get VPS information (`instance?`, `compact?`, `live?`)
 - **vps_usage_get**: Get usage statistics (`instance?`, `period?`, `days?`, `group_by?`)
 - **snapshot_list**: List snapshots (`instance?`, `sticky_only?`, `name_contains?`, `sort_by?`, `order?`, `limit?`)

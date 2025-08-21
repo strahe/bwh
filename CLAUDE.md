@@ -57,8 +57,10 @@ bwh mcp serve  # Start MCP server over stdio
 - `backup_list` - List backups with time range and filtering
 - `vps_audit_get` - Get audit logs with time range and filtering
 - `iso_list` - List available and mounted ISO images (`instance?`)
+- `instance_list` - List all configured instances with metadata (no parameters)
 
 ### Common Usage Patterns
+- `instance_list()` to discover all available instances before other operations
 - `vps_info_get(compact=true)` for quick status overview
 - `vps_info_get(live=true)` for real-time data and current status
 - `vps_usage_get(days=N, group_by=day)` for usage statistics over N days

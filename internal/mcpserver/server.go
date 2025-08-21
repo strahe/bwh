@@ -658,6 +658,66 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 			}), nil
 		},
 	)
+
+	// instance_list
+	s.AddTool(
+		mcp.NewTool(
+			"instance_list",
+			mcp.WithDescription("List all configured BWH/BandwagonHost/搬瓦工/瓦工 instances with metadata"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			instances := manager.ListInstances()
+			defaultInstance := manager.GetDefaultInstance()
+
+			type instanceInfo struct {
+				Name        string   `json:"name"`
+				VeID        string   `json:"veid"`
+				Description string   `json:"description,omitempty"`
+				Endpoint    string   `json:"endpoint,omitempty"`
+				Tags        []string `json:"tags,omitempty"`
+				IsDefault   bool     `json:"is_default"`
+			}
+
+			if len(instances) == 0 {
+				return mcp.NewToolResultStructuredOnly(map[string]any{
+					"instances":        []instanceInfo{},
+					"default_instance": "",
+					"total":            0,
+					"message":          "No instances configured",
+				}), nil
+			}
+
+			// Sort instances by name for consistent output
+			var names []string
+			for name := range instances {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+
+			var result []instanceInfo
+			for _, name := range names {
+				inst := instances[name]
+				result = append(result, instanceInfo{
+					Name:        name,
+					VeID:        inst.VeID,
+					Description: inst.Description,
+					Endpoint:    inst.Endpoint,
+					Tags:        inst.Tags,
+					IsDefault:   name == defaultInstance,
+				})
+			}
+
+			return mcp.NewToolResultStructuredOnly(map[string]any{
+				"instances":        result,
+				"default_instance": defaultInstance,
+				"total":            len(result),
+			}), nil
+		},
+	)
 }
 
 // registerResources exposes a minimal set of resources to browse last-fetched data or config view

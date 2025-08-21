@@ -188,6 +188,7 @@ claude mcp add bwh -- bwh mcp serve
 
 ### 可用工具
 
+- **instance_list**: 列出所有已配置的实例及元数据（无参数）
 - **vps_info_get**: 获取 VPS 信息 (`instance?`, `compact?`, `live?`)
 - **vps_usage_get**: 获取使用统计 (`instance?`, `period?`, `days?`, `group_by?`)
 - **snapshot_list**: 列出快照 (`instance?`, `sticky_only?`, `name_contains?`, `sort_by?`, `order?`, `limit?`)
