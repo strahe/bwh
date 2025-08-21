@@ -12,13 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strahe/bwh/internal/progress"
 	"github.com/strahe/bwh/internal/version"
 )
 
 const (
 	GitHubAPI            = "https://api.github.com/repos/strahe/bwh/releases/latest"
-	DefaultUpdateTimeout = 5 * time.Minute  // 5 minutes default for downloads
-	DefaultCheckTimeout  = 30 * time.Second // 30 seconds for API check only
+	DefaultUpdateTimeout = 2 * time.Minute  // 2 minutes default for downloads
+	DefaultCheckTimeout  = 10 * time.Second // 10 seconds for API check only
 	TempSuffix           = ".bwh-update"
 	BackupSuffix         = ".bwh-backup"
 )
@@ -218,8 +219,22 @@ func downloadBinaryWithTimeout(ctx context.Context, url, dest string, timeout ti
 	}
 	defer file.Close() //nolint:errcheck
 
-	_, err = io.Copy(file, resp.Body)
-	return err
+	// Get file size from response
+	fileSize := resp.ContentLength
+
+	// Create progress writer
+	progressWriter := progress.NewWriter(fileSize)
+
+	// Copy with progress
+	_, err = io.Copy(file, progress.TeeReader(resp.Body, progressWriter))
+	if err != nil {
+		return err
+	}
+
+	// Final progress update
+	progressWriter.Finish()
+
+	return nil
 }
 
 // copyFile copies a file from src to dst

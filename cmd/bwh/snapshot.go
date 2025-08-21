@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strahe/bwh/internal/progress"
 	"github.com/strahe/bwh/pkg/client"
 	"github.com/urfave/cli/v3"
 )
@@ -403,7 +404,7 @@ var snapshotDownloadCmd = &cli.Command{
 			description := decodeDescription(targetSnapshot.Description)
 			fmt.Printf("   Description  : %s\n", description)
 		}
-		fmt.Printf("   Size         : %s\n", formatBytes(targetSnapshot.Size.Value))
+		fmt.Printf("   Size         : %s\n", progress.FormatBytes(targetSnapshot.Size.Value))
 		fmt.Printf("   Download URL : %s\n", downloadURL)
 		fmt.Printf("   Output Path  : %s\n", outputPath)
 
@@ -447,9 +448,9 @@ func displaySnapshotsDetailed(snapshots []client.SnapshotInfo) {
 			description := decodeDescription(snapshot.Description)
 			fmt.Printf("   Description  : %s\n", description)
 		}
-		fmt.Printf("   Size         : %s", formatBytes(snapshot.Size.Value))
+		fmt.Printf("   Size         : %s", progress.FormatBytes(snapshot.Size.Value))
 		if snapshot.Uncompressed.Value > 0 {
-			fmt.Printf(" (compressed from %s)", formatBytes(snapshot.Uncompressed.Value))
+			fmt.Printf(" (compressed from %s)", progress.FormatBytes(snapshot.Uncompressed.Value))
 		}
 		fmt.Printf("\n")
 		fmt.Printf("   MD5 Hash     : %s\n", snapshot.MD5)
@@ -458,7 +459,7 @@ func displaySnapshotsDetailed(snapshots []client.SnapshotInfo) {
 		} else {
 			fmt.Printf("   Sticky       : ❌ No\n")
 			if snapshot.PurgesIn.Value > 0 {
-				fmt.Printf("   Purges In    : %s\n", formatSnapshotDuration(snapshot.PurgesIn.Value))
+				fmt.Printf("   Purges In    : %s\n", progress.FormatDuration(snapshot.PurgesIn.Value))
 			}
 		}
 		if snapshot.DownloadLink != "" {
@@ -485,14 +486,14 @@ func displaySnapshotsCompact(snapshots []client.SnapshotInfo) {
 			stickyIcon = "  "
 		}
 
-		fmt.Printf("├─ %s %s (%s)\n", stickyIcon, snapshot.FileName, formatBytes(snapshot.Size.Value))
+		fmt.Printf("├─ %s %s (%s)\n", stickyIcon, snapshot.FileName, progress.FormatBytes(snapshot.Size.Value))
 		fmt.Printf("│  ├─ OS: %s\n", snapshot.OS)
 		if snapshot.Description != "" {
 			description := decodeDescription(snapshot.Description)
 			fmt.Printf("│  ├─ Description: %s\n", description)
 		}
 		if !snapshot.Sticky && snapshot.PurgesIn.Value > 0 {
-			fmt.Printf("│  └─ Purges in: %s\n", formatSnapshotDuration(snapshot.PurgesIn.Value))
+			fmt.Printf("│  └─ Purges in: %s\n", progress.FormatDuration(snapshot.PurgesIn.Value))
 		} else if snapshot.Sticky {
 			fmt.Printf("│  └─ Sticky (never purged)\n")
 		} else {
@@ -500,31 +501,6 @@ func displaySnapshotsCompact(snapshots []client.SnapshotInfo) {
 		}
 	}
 	fmt.Printf("\n")
-}
-
-// formatSnapshotDuration converts seconds to human readable duration for snapshots
-func formatSnapshotDuration(seconds int64) string {
-	duration := time.Duration(seconds) * time.Second
-
-	days := int64(duration.Hours()) / 24
-	hours := int64(duration.Hours()) % 24
-	minutes := int64(duration.Minutes()) % 60
-
-	if days > 0 {
-		if hours > 0 {
-			return fmt.Sprintf("%d days %dh", days, hours)
-		}
-		return fmt.Sprintf("%d days", days)
-	} else if hours > 0 {
-		if minutes > 0 {
-			return fmt.Sprintf("%dh %dm", hours, minutes)
-		}
-		return fmt.Sprintf("%dh", hours)
-	} else if minutes > 0 {
-		return fmt.Sprintf("%dm", minutes)
-	} else {
-		return fmt.Sprintf("%ds", seconds)
-	}
 }
 
 // decodeDescription attempts to decode base64 description, returns original if not base64
@@ -647,86 +623,18 @@ func downloadFile(ctx context.Context, downloadURL, filepath string, expectedSiz
 	}
 
 	// Create progress writer
-	progress := &progressWriter{
-		total:     fileSize,
-		written:   0,
-		startTime: time.Now(),
-	}
+	progressWriter := progress.NewWriter(fileSize)
 
 	// Copy with progress
-	_, err = io.Copy(out, io.TeeReader(resp.Body, progress))
+	_, err = io.Copy(out, progress.TeeReader(resp.Body, progressWriter))
 	if err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
 
 	// Final progress update
-	progress.finish()
+	progressWriter.Finish()
 
 	return nil
-}
-
-// progressWriter implements io.Writer to show download progress
-type progressWriter struct {
-	total     int64
-	written   int64
-	startTime time.Time
-	lastPrint time.Time
-}
-
-func (pw *progressWriter) Write(p []byte) (int, error) {
-	n := len(p)
-	pw.written += int64(n)
-
-	// Update progress every 500ms or at completion
-	now := time.Now()
-	if now.Sub(pw.lastPrint) >= 500*time.Millisecond || pw.written >= pw.total {
-		pw.printProgress()
-		pw.lastPrint = now
-	}
-
-	return n, nil
-}
-
-func (pw *progressWriter) printProgress() {
-	if pw.total <= 0 {
-		fmt.Printf("\r📥 Downloaded: %s", formatBytes(pw.written))
-		return
-	}
-
-	percentage := float64(pw.written) / float64(pw.total) * 100
-	elapsed := time.Since(pw.startTime)
-
-	var speedStr string
-	var etaStr string
-
-	if elapsed > 0 {
-		bytesPerSec := float64(pw.written) / elapsed.Seconds()
-		speedStr = fmt.Sprintf(" • %s/s", formatBytes(int64(bytesPerSec)))
-
-		if bytesPerSec > 0 && pw.written < pw.total {
-			remainingBytes := pw.total - pw.written
-			eta := time.Duration(float64(remainingBytes)/bytesPerSec) * time.Second
-			etaStr = fmt.Sprintf(" • ETA: %s", formatSnapshotDuration(int64(eta.Seconds())))
-		}
-	}
-
-	// Progress bar (40 chars wide)
-	barWidth := 40
-	filled := int(percentage / 100.0 * float64(barWidth))
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-
-	fmt.Printf("\r📥 [%s] %.1f%% (%s / %s)%s%s",
-		bar, percentage,
-		formatBytes(pw.written), formatBytes(pw.total),
-		speedStr, etaStr)
-}
-
-func (pw *progressWriter) finish() {
-	if pw.total > 0 {
-		pw.written = pw.total // Ensure 100% is shown
-	}
-	pw.printProgress()
-	fmt.Printf("\n")
 }
 
 // shouldSkipTLSVerify determines if TLS verification should be skipped for a URL
@@ -804,9 +712,9 @@ func toggleSnapshotSticky(ctx context.Context, cmd *cli.Command, identifier stri
 		description := decodeDescription(targetSnapshot.Description)
 		fmt.Printf("   Description  : %s\n", description)
 	}
-	fmt.Printf("   Size         : %s", formatBytes(targetSnapshot.Size.Value))
+	fmt.Printf("   Size         : %s", progress.FormatBytes(targetSnapshot.Size.Value))
 	if targetSnapshot.Uncompressed.Value > 0 {
-		fmt.Printf(" (compressed from %s)", formatBytes(targetSnapshot.Uncompressed.Value))
+		fmt.Printf(" (compressed from %s)", progress.FormatBytes(targetSnapshot.Uncompressed.Value))
 	}
 	fmt.Printf("\n")
 	if targetSnapshot.Sticky {
@@ -814,7 +722,7 @@ func toggleSnapshotSticky(ctx context.Context, cmd *cli.Command, identifier stri
 	} else {
 		fmt.Printf("   Status       : 📌 Unpinned\n")
 		if targetSnapshot.PurgesIn.Value > 0 {
-			fmt.Printf("   Purges In    : %s\n", formatSnapshotDuration(targetSnapshot.PurgesIn.Value))
+			fmt.Printf("   Purges In    : %s\n", progress.FormatDuration(targetSnapshot.PurgesIn.Value))
 		}
 	}
 

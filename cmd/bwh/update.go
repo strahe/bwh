@@ -15,11 +15,11 @@ var updateCmd = &cli.Command{
 	Description: `Check for and install updates from GitHub releases.
 
 Examples:
-  bwh update                    # Check for updates and prompt for confirmation (5m timeout)
-  bwh update --check            # Only check for updates, don't install (30s timeout)
-  bwh update --force            # Update without confirmation prompt (5m timeout)
+  bwh update                    # Check for updates and prompt for confirmation (2m timeout)
+  bwh update --check            # Only check for updates, don't install (10s timeout)
+  bwh update --force            # Update without confirmation prompt (2m timeout)
   bwh update --timeout 10m      # Update with custom 10-minute timeout
-  bwh update --force -t 2m      # Force update with 2-minute timeout`,
+  bwh update --force -t 5m      # Force update with 5-minute timeout`,
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "check",
@@ -34,8 +34,8 @@ Examples:
 		&cli.DurationFlag{
 			Name:    "timeout",
 			Aliases: []string{"t"},
-			Usage:   "Timeout for update operations (e.g. 30s, 5m, 10m)",
-			Value:   5 * time.Minute,
+			Usage:   "Timeout for update operations (e.g. 30s, 2m, 10m)",
+			Value:   2 * time.Minute,
 		},
 	},
 	Action: runUpdate,
@@ -48,7 +48,7 @@ func runUpdate(cliCtx context.Context, cmd *cli.Command) error {
 
 	// Use shorter timeout for check-only operations
 	if checkOnly {
-		timeout = 30 * time.Second
+		timeout = 10 * time.Second
 	}
 
 	ctx, cancel := context.WithTimeout(cliCtx, timeout)
@@ -95,7 +95,7 @@ func runUpdate(cliCtx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	fmt.Printf("⬇️  Downloading %s... (timeout: %v)\n", info.LatestVersion, timeout)
+	fmt.Printf("⬇️  Downloading %s (%.2f MB, timeout: %v)\n", info.LatestVersion, float64(info.AssetSize)/(1024*1024), timeout)
 
 	if err := updater.PerformUpdateWithTimeout(ctx, info, timeout); err != nil {
 		return fmt.Errorf("failed to perform update: %w", err)
