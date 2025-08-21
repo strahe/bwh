@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -87,16 +88,14 @@ func CheckForUpdatesWithTimeout(ctx context.Context, timeout time.Duration) (*Up
 	}
 
 	// Check if update is available
-	// Handle development versions (with git info)
-	cleanCurrent := current
-	if strings.Contains(current, "-") {
-		parts := strings.Split(current, "-")
-		if len(parts) > 0 {
-			cleanCurrent = parts[0]
-		}
+	// Skip update check for development versions
+	if strings.HasSuffix(current, "-dev") {
+		info.HasUpdate = false
+	} else {
+		// Use semantic version comparison
+		compareResult := CompareVersions(current, release.TagName)
+		info.HasUpdate = compareResult < 0 // Current version is older than latest
 	}
-
-	info.HasUpdate = cleanCurrent != release.TagName && !strings.HasSuffix(current, "-dev")
 
 	if info.HasUpdate {
 		// Find the appropriate asset for current platform
@@ -267,13 +266,91 @@ func copyFile(src, dst string) error {
 // CompareVersions compares two semantic version strings
 // Returns: -1 if a < b, 0 if a == b, 1 if a > b
 func CompareVersions(a, b string) int {
-	// Simple string comparison for now
-	// Could be enhanced with proper semver parsing
+	return compareSemanticVersions(cleanVersion(a), cleanVersion(b))
+}
+
+// cleanVersion removes 'v' prefix and git suffix from version string
+func cleanVersion(version string) string {
+	// Remove 'v' prefix if present
+	cleaned := strings.TrimPrefix(version, "v")
+
+	// Remove git suffix (everything after first '-')
+	if idx := strings.Index(cleaned, "-"); idx != -1 {
+		cleaned = cleaned[:idx]
+	}
+
+	return cleaned
+}
+
+// parseVersion splits a semantic version into major, minor, patch components
+func parseVersion(version string) (major, minor, patch int, err error) {
+	parts := strings.Split(version, ".")
+	if len(parts) < 1 || len(parts) > 3 {
+		return 0, 0, 0, fmt.Errorf("invalid version format: %s", version)
+	}
+
+	// Parse major version
+	if major, err = strconv.Atoi(parts[0]); err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid major version: %s", parts[0])
+	}
+
+	// Parse minor version (default to 0 if not present)
+	if len(parts) > 1 {
+		if minor, err = strconv.Atoi(parts[1]); err != nil {
+			return 0, 0, 0, fmt.Errorf("invalid minor version: %s", parts[1])
+		}
+	}
+
+	// Parse patch version (default to 0 if not present)
+	if len(parts) > 2 {
+		if patch, err = strconv.Atoi(parts[2]); err != nil {
+			return 0, 0, 0, fmt.Errorf("invalid patch version: %s", parts[2])
+		}
+	}
+
+	return major, minor, patch, nil
+}
+
+// compareSemanticVersions performs proper semantic version comparison
+func compareSemanticVersions(a, b string) int {
 	if a == b {
 		return 0
 	}
-	if a < b {
-		return -1
+
+	majorA, minorA, patchA, errA := parseVersion(a)
+	majorB, minorB, patchB, errB := parseVersion(b)
+
+	// If either version is invalid, fall back to string comparison
+	if errA != nil || errB != nil {
+		if a < b {
+			return -1
+		}
+		return 1
 	}
-	return 1
+
+	// Compare major version
+	if majorA != majorB {
+		if majorA < majorB {
+			return -1
+		}
+		return 1
+	}
+
+	// Compare minor version
+	if minorA != minorB {
+		if minorA < minorB {
+			return -1
+		}
+		return 1
+	}
+
+	// Compare patch version
+	if patchA != patchB {
+		if patchA < patchB {
+			return -1
+		}
+		return 1
+	}
+
+	return 0
 }

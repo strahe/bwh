@@ -82,14 +82,12 @@ func runUpdate(cliCtx context.Context, cmd *cli.Command) error {
 
 	// Prompt for confirmation unless --force is used
 	if !force {
-		fmt.Printf("\nDo you want to update to %s? [y/N]: ", info.LatestVersion)
-		var response string
-		if _, err := fmt.Scanln(&response); err != nil {
-			fmt.Printf("Update cancelled.\n")
+		confirmed, err := promptConfirmation(fmt.Sprintf("Do you want to update to %s?", info.LatestVersion))
+		if err != nil {
+			fmt.Printf("Update cancelled: %v\n", err)
 			return nil
 		}
-
-		if response != "y" && response != "Y" && response != "yes" && response != "YES" {
+		if !confirmed {
 			fmt.Printf("Update cancelled.\n")
 			return nil
 		}

@@ -4,124 +4,91 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Go CLI, library, and MCP server for managing BandwagonHost VPS instances. Uses urfave/cli/v3 framework with multi-instance support via YAML config (~/.bwh/config.yaml).
+Go CLI, library, and MCP server for managing BandwagonHost VPS instances. Uses urfave/cli/v3 framework with multi-instance support via YAML config.
 
-## Development Commands
+## Development Workflow
 
 **REQUIRED before commits**: `make lint` (must pass with 0 issues)
 
-Common commands:
-- `make build` or `make` - Build binary
-- `make dev` - Full workflow (format + lint + test + build)
-- `make check` - Quick check (format + lint + test)
-- `go test ./...` - Run tests
+Quick reference:
+- `make build` - Build binary  
+- `make check` - Lint + test + format
+- `make dev` - Full workflow
+- `bwh update --check` - Check for CLI updates
 
-## Architecture
+## Critical Patterns (ALWAYS FOLLOW)
 
-### Package Structure
-
-- `cmd/bwh/` - CLI application entry point
-  - `main.go` - Main CLI application using urfave/cli/v3
-  - `helpers.go` - Shared client initialization logic (ALWAYS use these helpers)
-  - `control.go` - VPS control commands (start, stop, restart, kill, hostname, set-ptr)
-  - `info.go` - VPS information display (detailed/compact formats)
-  - `node.go` - Multi-instance configuration management
-  - `snapshot.go`, `backup.go`, `usage.go`, `audit.go`, `iso.go`, `private_ip.go`, etc. - Feature-specific commands
-  - `mcp.go` - MCP server command
-- `pkg/client/` - Public API client library
-  - `client.go` - BWH API client with comprehensive VPS management methods
-  - `types.go` - API response structures with detailed field documentation
-- `internal/config/` - Configuration management (multi-instance YAML config)
-- `internal/mcpserver/` - MCP server implementation for AI tool integration
-
-### Key Patterns
-
-- **Client Initialization**: ALL CLI commands must use `createBWHClient(cmd)` or `createBWHClientWithInstance(cmd)` helpers
-- **API Endpoint**: `https://api.64clouds.com/v1`
-- **Instance Resolution**: CLI flag > env var > default > single instance
-- **Command Organization**: Commands grouped by functionality in separate files
-
-## MCP Server Integration
-
-The project includes MCP server implementation in `internal/mcpserver/` for safe AI tool integration.
-
-### Usage
-```bash
-bwh mcp serve  # Start MCP server over stdio
-```
-
-### Available MCP Tools
-- `vps_info_get` - Get VPS information (`instance?`, `compact?`, `live?`)
-- `vps_usage_get` - Get usage statistics (`instance?`, `period?`, `days?`, `group_by?`)
-- `snapshot_list` - List snapshots with filtering and sorting options
-- `backup_list` - List backups with time range and filtering
-- `vps_audit_get` - Get audit logs with time range and filtering
-- `iso_list` - List available and mounted ISO images (`instance?`)
-- `instance_list` - List all configured instances with metadata (no parameters)
-
-### Common Usage Patterns
-- `instance_list()` to discover all available instances before other operations
-- `vps_info_get(compact=true)` for quick status overview
-- `vps_info_get(live=true)` for real-time data and current status
-- `vps_usage_get(days=N, group_by=day)` for usage statistics over N days
-- `iso_list()` for available and mounted ISO images information
-- When `instance` parameter is omitted, uses default from config
-
-### Implementation Notes
-- All tools are read-only and safe for AI use
-- Implements proper MCP protocol with error handling
-- Supports resource exposure for session information
-
-## Client Initialization Pattern
-
-**ALWAYS** use helper functions from `helpers.go`:
+### Helper Functions - MUST USE existing helpers in `cmd/bwh/helpers.go`:
 
 ```go
-// Standard commands
+// Client setup (REQUIRED for all commands)
 bwhClient, resolvedName, err := createBWHClient(cmd)
-
-// When instance config needed
+// OR when instance config needed:
 bwhClient, instance, resolvedName, err := createBWHClientWithInstance(cmd)
+
+// User confirmation (REQUIRED for y/N prompts)
+confirmed, err := promptConfirmation("Continue?")
+if err != nil || !confirmed { return nil }
+
+// Token validation (use existing validators)
+err := validateBackupToken(token)
 ```
 
-**DO NOT** duplicate client initialization code in commands.
+### Pre-Implementation Checklist
 
-## Documentation Synchronization
+Before writing new command functionality:
+1. ✅ **Search first**: `grep -r "similar_functionality" cmd/bwh/`
+2. ✅ **Client setup**: Using `createBWHClient*()` helpers?
+3. ✅ **User confirmation**: Using `promptConfirmation()`?
+4. ✅ **Progress display**: Using `internal/progress` package?
+5. ✅ **Code reuse**: Checked `helpers.go` for existing functions?
 
-**CRITICAL**: Documentation must always stay synchronized with the actual project state.
+### Common Anti-Patterns (AVOID)
 
-### Rules
-- **README files** (`README.md`, `README.zh.md`) must accurately reflect current features and commands
-- **CLAUDE.md** must be updated when architecture, commands, or key patterns change
-- **Update triggers**: When adding/removing commands, changing API methods, or modifying core functionality
-- **Verification**: Always check if documentation updates are needed after code changes
+❌ **Manual client setup** → ✅ Use `createBWHClient()` helpers  
+❌ **Manual confirmation logic** → ✅ Use `promptConfirmation()`  
+❌ **Duplicate progress bars** → ✅ Use `internal/progress`  
+❌ **Manual input validation** → ✅ Check existing validators in `helpers.go`
 
-### When to Update Documentation
-- ✅ Adding new CLI commands or subcommands
-- ✅ Adding new API client methods
-- ✅ Changing command names, flags, or behavior
-- ✅ Modifying package structure or key patterns
-- ✅ Adding new MCP tools or capabilities
-- ✅ Changing development workflows or build processes
+## Architecture Reference
 
-### Documentation Files to Consider
-- `README.md` - English documentation (commands list, API methods, usage examples)
-- `README.zh.md` - Chinese documentation (同步更新)
-- `CLAUDE.md` - Development guidance (architecture, patterns, commands location)
+### Key Components
+- `cmd/bwh/helpers.go` - **CRITICAL**: Contains required helper functions
+- `internal/progress/` - Progress display for downloads
+- `internal/updater/` - Self-update functionality  
+- `internal/mcpserver/` - MCP server for AI integration
+- `pkg/client/` - BWH API client library
 
-**Failure to maintain documentation synchronization leads to user confusion and development inefficiency.**
+### MCP Tools Summary
+See `internal/mcpserver/server.go` for complete list. Key tools:
+- `instance_list()` - List configured instances
+- `vps_info_get(live=true)` - Real-time VPS status
+- `vps_usage_get(days=N)` - Usage statistics
+
+## Documentation Sync (REQUIRED)
+
+**AUTOMATIC UPDATE RULE**: Every code change MUST sync docs immediately.
+
+### Update Triggers (check ALL when making changes):
+- ✅ New CLI commands/subcommands → Update READMEs + CLAUDE.md
+- ✅ Modified command behavior/flags → Update READMEs  
+- ✅ New API methods → Update README API section
+- ✅ Architecture changes → Update CLAUDE.md
+- ✅ New MCP tools → Update README + CLAUDE.md MCP section
+- ✅ Helper function changes → Update CLAUDE.md patterns
+
+### Files to Update:
+- `README.md` - English user documentation
+- `README.zh.md` - Chinese user documentation  
+- `CLAUDE.md` - Development patterns and architecture
+
+**Failure to sync docs = broken workflow for future development**
 
 ## Code Style
 
-- **NO obvious comments** that restate code
-- **DO document** exported functions with Go doc comments
-- **ADD comments** only for complex business logic
+- Use existing helpers (prevent code duplication)
+- `//nolint:errcheck` for expected ignored errors  
+- No obvious comments that restate code
+- Document exported functions with Go doc comments
 
-Example of good comment:
-```go
-// FlexibleInt handles inconsistent BWH API responses that return
-// numeric values as both strings and integers
-// type FlexibleInt struct {
-//     Value int64
-// }
-```
+**Remember**: Every time you write confirmation/client logic, check if it already exists in helpers.
