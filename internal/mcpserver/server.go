@@ -682,8 +682,25 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 				IsDefault   bool     `json:"is_default"`
 			}
 
+			if len(instances) == 0 {
+				return mcp.NewToolResultStructuredOnly(map[string]any{
+					"instances":        []instanceInfo{},
+					"default_instance": "",
+					"total":            0,
+					"message":          "No instances configured",
+				}), nil
+			}
+
+			// Sort instances by name for consistent output
+			var names []string
+			for name := range instances {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+
 			var result []instanceInfo
-			for name, inst := range instances {
+			for _, name := range names {
+				inst := instances[name]
 				result = append(result, instanceInfo{
 					Name:        name,
 					VeID:        inst.VeID,
