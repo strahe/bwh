@@ -1,6 +1,6 @@
 # bwh
 
-[![CI](https://github.com/strahe/bwh/workflows/CI/badge.svg)](https://github.com/strahe/bwh/actions)
+[![CI](https://github.com/strahe/bwh/actions/workflows/ci.yml/badge.svg)](https://github.com/strahe/bwh/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/strahe/bwh)](https://goreportcard.com/report/github.com/strahe/bwh)
 [![Release](https://img.shields.io/github/v/release/strahe/bwh)](https://github.com/strahe/bwh/releases)
 
@@ -202,6 +202,15 @@ Add to your Continue configuration:
 
 All MCP tools are safe, read-only operations that won't modify your VPS configuration or data.
 
+## Shell Completion
+
+```bash
+bwh completion bash > /usr/local/share/bash-completion/completions/bwh  # bash (Linux)
+bwh completion bash > /opt/homebrew/etc/bash_completion.d/bwh           # bash (macOS)
+bwh completion zsh > /usr/local/share/zsh/site-functions/_bwh           # zsh (system)
+bwh completion fish > ~/.config/fish/completions/bwh.fish              # fish (user)
+```
+
 ## Available Commands
 
 ```
@@ -227,6 +236,7 @@ ipv6            Manage IPv6 subnets (add, delete, list)
 private-ip (pi) Manage Private IPv4 addresses (info, available, assign, delete)
 mcp             Run MCP server for read-only BWH management
 update          Check for updates and update BWH CLI to the latest version
+completion      Generate shell completion script
 ```
 
 Use `bwh <command> --help` to view detailed options and usage examples for each command.
