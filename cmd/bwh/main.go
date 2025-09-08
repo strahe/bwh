@@ -11,9 +11,10 @@ import (
 
 func main() {
 	cmd := &cli.Command{
-		Name:    "bwh",
-		Usage:   "manage your BWH instances",
-		Version: version.GetVersion(),
+		Name:                  "bwh",
+		Usage:                 "manage your BWH instances",
+		Version:               version.GetVersion(),
+		EnableShellCompletion: true,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "config",

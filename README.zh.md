@@ -137,7 +137,7 @@ BWH MCP 服务器可与多种 AI 工具和编辑器无缝集成。向您的 MCP 
 }
 ```
 
- 
+
 
 #### Claude Code
 
@@ -145,7 +145,7 @@ BWH MCP 服务器可与多种 AI 工具和编辑器无缝集成。向您的 MCP 
 claude mcp add bwh -- bwh mcp serve
 ```
 
- 
+
 
 #### Cursor
 
@@ -162,7 +162,7 @@ claude mcp add bwh -- bwh mcp serve
 }
 ```
 
- 
+
 
 #### Continue (VS Code 扩展)
 
@@ -182,7 +182,7 @@ claude mcp add bwh -- bwh mcp serve
 }
 ```
 
- 
+
 
 ### 配置说明
 
@@ -201,6 +201,15 @@ claude mcp add bwh -- bwh mcp serve
 - **iso_list**: 列出可用和已挂载的 ISO 镜像 (`instance?`)
 
 所有 MCP 工具都是安全的只读操作，不会修改您的 VPS 配置或数据。
+
+## 自动补全
+
+```bash
+bwh completion bash > /usr/local/share/bash-completion/completions/bwh  # bash (Linux)
+bwh completion bash > /opt/homebrew/etc/bash_completion.d/bwh           # bash (macOS)
+bwh completion zsh > /usr/local/share/zsh/site-functions/_bwh           # zsh (系统级)
+bwh completion fish > ~/.config/fish/completions/bwh.fish              # fish (用户级)
+```
 
 ## 可用命令
 
@@ -227,6 +236,7 @@ ipv6            管理 IPv6 子网（添加、删除、列出）
 private-ip (pi) 管理私有 IPv4 地址（info、available、assign、delete）
 mcp             运行 MCP 服务器以进行只读 BWH 管理
 update          检查更新并将 BWH CLI 更新到最新版本
+completion      生成 shell 自动补全脚本
 ```
 
 使用 `bwh <command> --help` 查看每个命令的详细选项和用法示例。
