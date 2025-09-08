@@ -1,6 +1,6 @@
 # bwh
 
-[![CI](https://github.com/strahe/bwh/workflows/CI/badge.svg)](https://github.com/strahe/bwh/actions)
+[![CI](https://github.com/strahe/bwh/actions/workflows/ci.yml/badge.svg)](https://github.com/strahe/bwh/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/strahe/bwh)](https://goreportcard.com/report/github.com/strahe/bwh)
 [![Release](https://img.shields.io/github/v/release/strahe/bwh)](https://github.com/strahe/bwh/releases)
 
