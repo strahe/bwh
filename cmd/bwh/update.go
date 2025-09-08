@@ -100,7 +100,7 @@ func runUpdate(cliCtx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Printf("✅ Successfully updated to %s!\n", info.LatestVersion)
-	fmt.Printf("Please restart your terminal or run 'bwh version' to verify the update.\n")
+	fmt.Printf("Please restart your terminal or run 'bwh -v' to verify the update.\n")
 
 	return nil
 }
