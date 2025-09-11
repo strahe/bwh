@@ -53,6 +53,12 @@ var usageCmd = &cli.Command{
 			return nil
 		}
 
+		// Get bandwidth information for total traffic display
+		serviceInfo, err := bwhClient.GetServiceInfo(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get service info: %w", err)
+		}
+
 		// Sort data by timestamp (oldest first for proper trend display)
 		sort.Slice(usageStats.Data, func(i, j int) bool {
 			return usageStats.Data[i].Timestamp < usageStats.Data[j].Timestamp
@@ -63,18 +69,18 @@ var usageCmd = &cli.Command{
 
 		// Display data
 		if summaryOnly {
-			displayUsageSummary(usageStats, resolvedName, len(displayData), period)
+			displayUsageSummary(usageStats, resolvedName, len(displayData), period, serviceInfo)
 		} else if compact {
-			displayCompactUsage(usageStats, resolvedName, displayData, period)
+			displayCompactUsage(usageStats, resolvedName, displayData, period, serviceInfo)
 		} else {
-			displayDetailedUsageCharts(resolvedName, displayData)
+			displayDetailedUsageCharts(resolvedName, displayData, serviceInfo)
 		}
 
 		return nil
 	},
 }
 
-func displayDetailedUsageCharts(instanceName string, data []client.UsageDataPoint) {
+func displayDetailedUsageCharts(instanceName string, data []client.UsageDataPoint, serviceInfo *client.ServiceInfo) {
 	fmt.Printf("\n")
 	fmt.Printf("┌─────────────────────────────────────────────────────────────────────────┐\n")
 	fmt.Printf("│                    Usage Trends: %-35s │\n", instanceName)
@@ -117,6 +123,32 @@ func displayDetailedUsageCharts(instanceName string, data []client.UsageDataPoin
 
 	fmt.Print("\n" + strings.Repeat("─", 70) + "\n")
 
+	// Combined Disk I/O Chart
+	fmt.Printf("\n💾 Disk I/O Activity (KB) %s\n", timeRange)
+	diskReadData := make([]float64, len(data))
+	diskWriteData := make([]float64, len(data))
+
+	for i, point := range data {
+		diskReadData[i] = float64(point.DiskReadBytes) / 1024
+		diskWriteData[i] = float64(point.DiskWriteBytes) / 1024
+	}
+
+	avgReadPerSec := sum(diskReadData) / duration.Seconds()
+	avgWritePerSec := sum(diskWriteData) / duration.Seconds()
+
+	diskGraph := asciigraph.PlotMany([][]float64{diskReadData, diskWriteData},
+		asciigraph.Height(8),
+		asciigraph.Width(70),
+		asciigraph.SeriesColors(asciigraph.Green, asciigraph.Yellow),
+		asciigraph.Caption("Disk I/O (Read: Green, Write: Yellow)"))
+	fmt.Printf("%s\n", diskGraph)
+	fmt.Printf("Read Total: %s | Average: %s\n",
+		formatBytes(int64(sum(diskReadData)*1024)), formatDiskRate(avgReadPerSec, "KB"))
+	fmt.Printf("Write Total: %s | Average: %s\n",
+		formatBytes(int64(sum(diskWriteData)*1024)), formatDiskRate(avgWritePerSec, "KB"))
+
+	fmt.Print("\n" + strings.Repeat("─", 70) + "\n")
+
 	// Combined Network Traffic Chart
 	fmt.Printf("\n🌐 Network Traffic (MB) %s\n", timeRange)
 	netInData := make([]float64, len(data))
@@ -141,34 +173,44 @@ func displayDetailedUsageCharts(instanceName string, data []client.UsageDataPoin
 	fmt.Printf("Outgoing Total: %s | Average: %s\n",
 		formatBytes(int64(sum(netOutData)*1024*1024)), formatRate(avgOutPerHour, "MB"))
 
-	fmt.Print("\n" + strings.Repeat("─", 70) + "\n")
-
-	// Combined Disk I/O Chart
-	fmt.Printf("\n💾 Disk I/O Activity (KB) %s\n", timeRange)
-	diskReadData := make([]float64, len(data))
-	diskWriteData := make([]float64, len(data))
-
-	for i, point := range data {
-		diskReadData[i] = float64(point.DiskReadBytes) / 1024
-		diskWriteData[i] = float64(point.DiskWriteBytes) / 1024
+	// Display total bandwidth information
+	if serviceInfo != nil {
+		displayBandwidthSummary(serviceInfo)
 	}
-
-	avgReadPerSec := sum(diskReadData) / duration.Seconds()
-	avgWritePerSec := sum(diskWriteData) / duration.Seconds()
-
-	diskGraph := asciigraph.PlotMany([][]float64{diskReadData, diskWriteData},
-		asciigraph.Height(8),
-		asciigraph.Width(70),
-		asciigraph.SeriesColors(asciigraph.Green, asciigraph.Yellow),
-		asciigraph.Caption("Disk I/O (Read: Green, Write: Yellow)"))
-	fmt.Printf("%s\n", diskGraph)
-	fmt.Printf("Read Total: %s | Average: %s\n",
-		formatBytes(int64(sum(diskReadData)*1024)), formatDiskRate(avgReadPerSec, "KB"))
-	fmt.Printf("Write Total: %s | Average: %s\n",
-		formatBytes(int64(sum(diskWriteData)*1024)), formatDiskRate(avgWritePerSec, "KB"))
 }
 
-func displayCompactUsage(stats *client.UsageStatsResponse, instanceName string, data []client.UsageDataPoint, period string) {
+// displayBandwidthSummary displays monthly bandwidth information in a compact format for usage charts
+func displayBandwidthSummary(serviceInfo *client.ServiceInfo) {
+	// Apply bandwidth multiplier for expensive locations
+	actualMonthlyLimit := serviceInfo.PlanMonthlyData * int64(serviceInfo.MonthlyDataMultiplier)
+	actualDataUsed := serviceInfo.DataCounter * int64(serviceInfo.MonthlyDataMultiplier)
+
+	fmt.Printf("\n📊 Monthly Bandwidth\n")
+	fmt.Printf("Used: %s / %s", formatBytes(actualDataUsed), formatBytes(actualMonthlyLimit))
+
+	if actualMonthlyLimit > 0 {
+		usagePercent := float64(actualDataUsed) / float64(actualMonthlyLimit) * 100
+		fmt.Printf(" (%.1f%%)", usagePercent)
+	}
+
+	remaining := actualMonthlyLimit - actualDataUsed
+	if remaining > 0 {
+		fmt.Printf(" | Remaining: %s", formatBytes(remaining))
+	} else {
+		fmt.Printf(" | ⚠️  Over limit by: %s", formatBytes(-remaining))
+	}
+
+	if serviceInfo.MonthlyDataMultiplier > 1 {
+		fmt.Printf(" [%dx multiplier]", serviceInfo.MonthlyDataMultiplier)
+	}
+
+	if serviceInfo.DataNextReset > 0 {
+		resetTime := time.Unix(serviceInfo.DataNextReset, 0).Local()
+		fmt.Printf("\nNext reset: %s", resetTime.Format("2006-01-02 15:04"))
+	}
+}
+
+func displayCompactUsage(stats *client.UsageStatsResponse, instanceName string, data []client.UsageDataPoint, period string, serviceInfo *client.ServiceInfo) {
 	fmt.Printf("\nUsage Summary: %s (%s)\n", instanceName, stats.VMType)
 	fmt.Printf("├─ %d data points (period: %s)", len(data), period)
 
@@ -193,19 +235,6 @@ func displayCompactUsage(stats *client.UsageStatsResponse, instanceName string, 
 			min(cpuData), max(cpuData), avg(cpuData))
 	}
 
-	// Network traffic stats (no chart)
-	totalNetIn, totalNetOut := float64(0), float64(0)
-	for _, point := range data {
-		totalNetIn += float64(point.NetworkInBytes) / 1024 / 1024
-		totalNetOut += float64(point.NetworkOutBytes) / 1024 / 1024
-	}
-
-	if len(data) > 0 {
-		fmt.Printf("├─ Network: %s in + %s out\n",
-			formatBytes(int64(totalNetIn*1024*1024)),
-			formatBytes(int64(totalNetOut*1024*1024)))
-	}
-
 	// Disk I/O stats (no chart)
 	totalDiskRead, totalDiskWrite := float64(0), float64(0)
 	for _, point := range data {
@@ -214,15 +243,54 @@ func displayCompactUsage(stats *client.UsageStatsResponse, instanceName string, 
 	}
 
 	if len(data) > 0 {
-		fmt.Printf("└─ Disk I/O: %s read + %s write\n",
+		fmt.Printf("├─ Disk I/O: %s read + %s write\n",
 			formatBytes(int64(totalDiskRead*1024)),
 			formatBytes(int64(totalDiskWrite*1024)))
+	}
+
+	// Network traffic stats (no chart)
+	totalNetIn, totalNetOut := float64(0), float64(0)
+	for _, point := range data {
+		totalNetIn += float64(point.NetworkInBytes) / 1024 / 1024
+		totalNetOut += float64(point.NetworkOutBytes) / 1024 / 1024
+	}
+
+	if len(data) > 0 {
+		fmt.Printf("└─ Network: %s in + %s out\n",
+			formatBytes(int64(totalNetIn*1024*1024)),
+			formatBytes(int64(totalNetOut*1024*1024)))
+	}
+
+	// Display total bandwidth information
+	if serviceInfo != nil {
+		displayCompactBandwidthInfo(serviceInfo)
 	}
 
 	fmt.Printf("\n")
 }
 
-func displayUsageSummary(stats *client.UsageStatsResponse, instanceName string, dataPoints int, period string) {
+// displayCompactBandwidthInfo displays monthly bandwidth information in compact format
+func displayCompactBandwidthInfo(serviceInfo *client.ServiceInfo) {
+	// Apply bandwidth multiplier for expensive locations
+	actualMonthlyLimit := serviceInfo.PlanMonthlyData * int64(serviceInfo.MonthlyDataMultiplier)
+	actualDataUsed := serviceInfo.DataCounter * int64(serviceInfo.MonthlyDataMultiplier)
+
+	bandwidthLine := fmt.Sprintf("├─ Monthly Data: %s / %s",
+		formatBytes(actualDataUsed), formatBytes(actualMonthlyLimit))
+
+	if actualMonthlyLimit > 0 {
+		usagePercent := float64(actualDataUsed) / float64(actualMonthlyLimit) * 100
+		bandwidthLine += fmt.Sprintf(" (%.1f%%)", usagePercent)
+	}
+
+	if serviceInfo.MonthlyDataMultiplier > 1 {
+		bandwidthLine += fmt.Sprintf(" [%dx]", serviceInfo.MonthlyDataMultiplier)
+	}
+
+	fmt.Printf("%s\n", bandwidthLine)
+}
+
+func displayUsageSummary(stats *client.UsageStatsResponse, instanceName string, dataPoints int, period string, serviceInfo *client.ServiceInfo) {
 	if len(stats.Data) == 0 {
 		return
 	}
@@ -257,16 +325,47 @@ func displayUsageSummary(stats *client.UsageStatsResponse, instanceName string, 
 	fmt.Printf("\n")
 	fmt.Printf("   CPU Usage        : %.1f%% avg | %.0f%% - %.0f%% range\n",
 		avg(cpuData), min(cpuData), max(cpuData))
-	fmt.Printf("   Network Traffic  : %s in, %s out (total)\n",
-		formatBytes(int64(netInTotal)), formatBytes(int64(netOutTotal)))
 	fmt.Printf("   Disk Activity    : %s read, %s write (total)\n",
 		formatBytes(int64(diskReadTotal)), formatBytes(int64(diskWriteTotal)))
+	fmt.Printf("   Network Traffic  : %s in, %s out (total)\n",
+		formatBytes(int64(netInTotal)), formatBytes(int64(netOutTotal)))
+
+	// Display monthly bandwidth summary
+	if serviceInfo != nil {
+		displaySummaryBandwidthInfo(serviceInfo)
+	}
 
 	if timeSpan.Hours() > 0 {
 		netInPerHour := netInTotal / timeSpan.Hours()
 		netOutPerHour := netOutTotal / timeSpan.Hours()
 		fmt.Printf("   Network Rate     : %s/h in, %s/h out (average)\n",
 			formatBytes(int64(netInPerHour)), formatBytes(int64(netOutPerHour)))
+	}
+}
+
+// displaySummaryBandwidthInfo displays monthly bandwidth information in summary format
+func displaySummaryBandwidthInfo(serviceInfo *client.ServiceInfo) {
+	// Apply bandwidth multiplier for expensive locations
+	actualMonthlyLimit := serviceInfo.PlanMonthlyData * int64(serviceInfo.MonthlyDataMultiplier)
+	actualDataUsed := serviceInfo.DataCounter * int64(serviceInfo.MonthlyDataMultiplier)
+
+	fmt.Printf("   Monthly Bandwidth: %s / %s",
+		formatBytes(actualDataUsed), formatBytes(actualMonthlyLimit))
+
+	if actualMonthlyLimit > 0 {
+		usagePercent := float64(actualDataUsed) / float64(actualMonthlyLimit) * 100
+		remaining := actualMonthlyLimit - actualDataUsed
+		fmt.Printf(" (%.1f%% used, %s remaining)", usagePercent, formatBytes(remaining))
+	}
+
+	if serviceInfo.MonthlyDataMultiplier > 1 {
+		fmt.Printf(" [%dx multiplier]", serviceInfo.MonthlyDataMultiplier)
+	}
+	fmt.Printf("\n")
+
+	if serviceInfo.DataNextReset > 0 {
+		resetTime := time.Unix(serviceInfo.DataNextReset, 0).Local()
+		fmt.Printf("   Next Reset       : %s\n", resetTime.Format("2006-01-02 15:04"))
 	}
 }
 
