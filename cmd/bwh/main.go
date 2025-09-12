@@ -134,14 +134,14 @@ func showCachedUpdateNotification() {
 
 	var info updater.UpdateInfo
 	if err := json.Unmarshal(data, &info); err != nil {
-		os.Remove(updateCacheFile)
+		os.Remove(updateCacheFile) //nolint:errcheck
 		return
 	}
 
 	// Check if user has already upgraded
 	currentVersion := version.GetVersion()
 	if updater.CompareVersions(currentVersion, info.LatestVersion) >= 0 {
-		os.Remove(updateCacheFile) // User has upgraded, remove cache
+		os.Remove(updateCacheFile) //nolint:errcheck
 		return
 	}
 
@@ -153,22 +153,22 @@ func showCachedUpdateNotification() {
 
 func cacheUpdateInfo(info *updater.UpdateInfo) {
 	updateCacheFile := getUpdateCacheFilePath()
-	if err := os.MkdirAll(filepath.Dir(updateCacheFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(updateCacheFile), 0o755); err != nil {
 		return
 	}
 	data, err := json.Marshal(info)
 	if err != nil {
 		return
 	}
-	os.WriteFile(updateCacheFile, data, 0644) //nolint:errcheck
+	os.WriteFile(updateCacheFile, data, 0o644) //nolint:errcheck
 }
 
 func updateLastCheckTime() {
 	lastCheckFile := getLastCheckFilePath()
-	if err := os.MkdirAll(filepath.Dir(lastCheckFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(lastCheckFile), 0o755); err != nil {
 		return
 	}
-	os.WriteFile(lastCheckFile, []byte(time.Now().Format(time.RFC3339)), 0644) //nolint:errcheck
+	os.WriteFile(lastCheckFile, []byte(time.Now().Format(time.RFC3339)), 0o644) //nolint:errcheck
 }
 
 func getUpdateCacheFilePath() string {
