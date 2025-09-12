@@ -7,7 +7,7 @@ PACKAGE := github.com/strahe/bwh
 MAIN_PACKAGE := ./cmd/bwh
 
 # Build information
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION ?= $(or $(BWH_VERSION),$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev"))
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S_UTC')
 COMMIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
