@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
-
-	"math"
 
 	"github.com/guptarohit/asciigraph"
 	"github.com/strahe/bwh/pkg/client"
@@ -668,11 +667,12 @@ func addXAxisLabels(graph string, width int, startTime, endTime time.Time) strin
 
 		// Let's try centering the label on the point, except first (left) and last (right)
 		var pos int
-		if i == 0 {
+		switch i {
+		case 0:
 			pos = 0
-		} else if i == numLabels-1 {
+		case numLabels - 1:
 			pos = width - len(label)
-		} else {
+		default:
 			center := int(math.Round(ratio * float64(width)))
 			pos = center - len(label)/2
 		}
