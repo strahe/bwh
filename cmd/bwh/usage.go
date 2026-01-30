@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"math"
+
 	"github.com/guptarohit/asciigraph"
 	"github.com/strahe/bwh/pkg/client"
 	"github.com/urfave/cli/v3"
@@ -113,11 +115,7 @@ func displayDetailedUsageCharts(instanceName string, data []client.UsageDataPoin
 		cpuData[i] = float64(point.CPUUsage)
 	}
 
-	cpuGraph := asciigraph.Plot(cpuData,
-		asciigraph.Height(8),
-		asciigraph.Width(70),
-		asciigraph.Caption("CPU Usage Over Time"))
-	fmt.Printf("%s\n", cpuGraph)
+	fmt.Printf("%s\n", renderGraphWithXAxis(cpuData, 70, 8, time.Unix(data[0].Timestamp-300, 0), time.Unix(data[len(data)-1].Timestamp, 0), "CPU Usage Over Time"))
 	fmt.Printf("\nRange: %.0f%% - %.0f%% | Average: %.1f%%\n",
 		min(cpuData), max(cpuData), avg(cpuData))
 
@@ -136,12 +134,7 @@ func displayDetailedUsageCharts(instanceName string, data []client.UsageDataPoin
 	avgReadPerSec := sum(diskReadData) / duration.Seconds()
 	avgWritePerSec := sum(diskWriteData) / duration.Seconds()
 
-	diskGraph := asciigraph.PlotMany([][]float64{diskReadData, diskWriteData},
-		asciigraph.Height(8),
-		asciigraph.Width(70),
-		asciigraph.SeriesColors(asciigraph.Green, asciigraph.Yellow),
-		asciigraph.Caption("Disk I/O (Read: Green, Write: Yellow)"))
-	fmt.Printf("%s\n", diskGraph)
+	fmt.Printf("%s\n", renderGraphWithXAxisMulti([][]float64{diskReadData, diskWriteData}, []asciigraph.AnsiColor{asciigraph.Green, asciigraph.Yellow}, 70, 8, time.Unix(data[0].Timestamp-300, 0), time.Unix(data[len(data)-1].Timestamp, 0), "Disk I/O (Read: Green, Write: Yellow)"))
 	fmt.Printf("Read Total: %s | Average: %s\n",
 		formatBytes(int64(sum(diskReadData)*1024)), formatDiskRate(avgReadPerSec, "KB"))
 	fmt.Printf("Write Total: %s | Average: %s\n",
@@ -162,12 +155,7 @@ func displayDetailedUsageCharts(instanceName string, data []client.UsageDataPoin
 	avgInPerHour := sum(netInData) / duration.Hours()
 	avgOutPerHour := sum(netOutData) / duration.Hours()
 
-	netInGraph := asciigraph.PlotMany([][]float64{netInData, netOutData},
-		asciigraph.Height(8),
-		asciigraph.Width(70),
-		asciigraph.SeriesColors(asciigraph.Blue, asciigraph.Red),
-		asciigraph.Caption("Network Traffic (In: Blue, Out: Red)"))
-	fmt.Printf("%s\n", netInGraph)
+	fmt.Printf("%s\n", renderGraphWithXAxisMulti([][]float64{netInData, netOutData}, []asciigraph.AnsiColor{asciigraph.Blue, asciigraph.Red}, 70, 8, time.Unix(data[0].Timestamp-300, 0), time.Unix(data[len(data)-1].Timestamp, 0), "Network Traffic (In: Blue, Out: Red)"))
 	fmt.Printf("Incoming Total: %s | Average: %s\n",
 		formatBytes(int64(sum(netInData)*1024*1024)), formatRate(avgInPerHour, "MB"))
 	fmt.Printf("Outgoing Total: %s | Average: %s\n",
@@ -470,8 +458,19 @@ func filterDataByPeriod(data []client.UsageDataPoint, period string) []client.Us
 	case "all":
 		return data
 	default:
-		// Default to 1 day
-		cutoffTime = now.Add(-24 * time.Hour)
+		// Try to parse as duration (check for negative sign to ensure we subtract)
+		if duration, err := time.ParseDuration(period); err == nil {
+			if duration > 0 {
+				cutoffTime = now.Add(-duration)
+			} else {
+				// If user provided negative duration, add it directly
+				cutoffTime = now.Add(duration)
+			}
+		} else {
+			// Default to 1 day if parsing fails
+			cutoffTime = now.Add(-24 * time.Hour)
+			fmt.Printf("Warning: Invalid period format '%s', defaulting to 1d\n", period)
+		}
 	}
 
 	var filtered []client.UsageDataPoint
@@ -549,4 +548,175 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%d months", months)
 	}
 	return fmt.Sprintf("%d months %d weeks", months, remainingWeeks)
+}
+
+// renderGraphWithXAxis renders a graph with X-axis time labels
+func renderGraphWithXAxis(data []float64, width, height int, startTime, endTime time.Time, caption string) string {
+	graph := asciigraph.Plot(data,
+		asciigraph.Height(height),
+		asciigraph.Width(width))
+
+	graphWithLabels := addXAxisLabels(graph, width, startTime, endTime)
+	return addCaptionWithMargins(graphWithLabels, width, caption)
+}
+
+// renderGraphWithXAxisMulti renders a multi-series graph with X-axis time labels
+func renderGraphWithXAxisMulti(data [][]float64, colors []asciigraph.AnsiColor, width, height int, startTime, endTime time.Time, caption string) string {
+	graph := asciigraph.PlotMany(data,
+		asciigraph.Height(height),
+		asciigraph.Width(width),
+		asciigraph.SeriesColors(colors...))
+
+	graphWithLabels := addXAxisLabels(graph, width, startTime, endTime)
+	return addCaptionWithMargins(graphWithLabels, width, caption)
+}
+
+// addCaptionWithMargins adds a centered caption with vertical margins
+func addCaptionWithMargins(graph string, width int, caption string) string {
+	if caption == "" {
+		return graph
+	}
+	padding := (width - len(caption)) / 2
+	if padding < 0 {
+		padding = 0
+	}
+
+	return fmt.Sprintf("%s\n\n%s%s\n", graph, strings.Repeat(" ", padding), caption)
+}
+
+// addXAxisLabels adds time labels to the X-axis of the graph
+func addXAxisLabels(graph string, width int, startTime, endTime time.Time) string {
+	lines := strings.Split(graph, "\n")
+	if len(lines) == 0 {
+		return graph
+	}
+
+	// Find the padding (y-axis label width) from the last line (axis line)
+	// The axis line usually looks like " 100.00 ┼──────..." or similar
+	// process from bottom up to find the axis line
+	var axisLineIndex int
+	var padding int
+	foundAxis := false
+
+	// Iterate backwards skipping empty lines or caption lines
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		// Check for horizontal axis characters
+		if strings.Contains(line, "─") && (strings.Contains(line, "┼") || strings.Contains(line, "┤")) {
+			axisLineIndex = i
+			// Find where the axis starts (first occurrence of ┼ or ┤ or ╰)
+			idx := strings.IndexAny(line, "┼┤╰")
+			if idx != -1 {
+				padding = idx + 1 // +1 because the plot starts after the separator
+				foundAxis = true
+				break
+			}
+		}
+	}
+
+	if !foundAxis {
+		// Fallback: assume default padding if we can't detect it, but usually asciigraph is consistent
+		padding = 10
+	}
+
+	// Determine time format and interval
+	duration := endTime.Sub(startTime)
+	var timeFormat string
+
+	// Dynamic time format based on duration
+	if duration.Hours() < 24 {
+		timeFormat = "15:04" // HH:MM
+	} else if duration.Hours() < 24*7 {
+		timeFormat = "01-02 15:04" // MM-DD HH:MM
+	} else {
+		timeFormat = "01-02" // MM-DD
+	}
+
+	// Calculate label points
+	// We want ~5-6 labels nicely spaced
+	numLabels := 5
+	// Check if labels fit
+	exampleLabel := startTime.Format(timeFormat)
+	labelWidth := len(exampleLabel)
+
+	// Adjust number of labels if format is long
+	if labelWidth > 8 {
+		numLabels = 4
+	}
+	if labelWidth > 12 {
+		numLabels = 3
+	}
+
+	// Create label line
+	var labelLine strings.Builder
+	// Pad with spaces to match y-axis width
+	labelLine.WriteString(strings.Repeat(" ", padding))
+
+	// Re-approach: Build string using a rune slice for the chart area
+	axisRunes := make([]rune, width)
+	for i := range axisRunes {
+		axisRunes[i] = ' '
+	}
+
+	for i := 0; i < numLabels; i++ {
+		ratio := float64(i) / float64(numLabels-1)
+		t := startTime.Add(time.Duration(float64(duration) * ratio))
+		label := t.Format(timeFormat)
+
+		// Position relative to the start of the chart area (0 to width-1)
+		// We align the start of the label text.
+
+		// Let's try centering the label on the point, except first (left) and last (right)
+		var pos int
+		if i == 0 {
+			pos = 0
+		} else if i == numLabels-1 {
+			pos = width - len(label)
+		} else {
+			center := int(math.Round(ratio * float64(width)))
+			pos = center - len(label)/2
+		}
+
+		// Boundary checks
+		if pos < 0 {
+			pos = 0
+		}
+		if pos+len(label) > width {
+			pos = width - len(label)
+		}
+
+		// Write to rune slice if space is clear (simple collision avoidance)
+		canWrite := true
+		for k := 0; k < len(label); k++ {
+			if pos+k < len(axisRunes) && axisRunes[pos+k] != ' ' {
+				// overlap detected, maybe skip this intermediate label
+				// For first and last, we force write?
+				if i != 0 && i != numLabels-1 {
+					canWrite = false
+					break
+				}
+			}
+		}
+
+		if canWrite {
+			for k, r := range label {
+				if pos+k < len(axisRunes) {
+					axisRunes[pos+k] = r
+				}
+			}
+		}
+	}
+
+	labelLine.WriteString(string(axisRunes))
+
+	// Inject the label line immediately after the axis line we found
+	newLines := make([]string, 0, len(lines)+1)
+	for i, line := range lines {
+		newLines = append(newLines, line)
+		if i == axisLineIndex {
+			newLines = append(newLines, labelLine.String())
+		}
+	}
+
+	return strings.Join(newLines, "\n")
 }
