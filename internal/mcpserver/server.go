@@ -24,7 +24,7 @@ func RunMCPStdioServer(ctx context.Context, configPath, instanceName string) err
 	}
 
 	// Resolve once here only for connectivity check (uses provided instanceName or config default)
-	instForCheck, _, err := manager.ResolveInstance(instanceName)
+	instForCheck, resolvedInstanceName, err := manager.ResolveInstance(instanceName)
 	if err != nil {
 		return fmt.Errorf("failed to resolve instance: %w", err)
 	}
@@ -50,7 +50,7 @@ func RunMCPStdioServer(ctx context.Context, configPath, instanceName string) err
 	)
 
 	// Register read-only tools
-	registerReadOnlyTools(s, manager)
+	registerReadOnlyTools(s, manager, resolvedInstanceName)
 
 	// Register simple resources
 	registerResources(s, manager)
@@ -59,8 +59,163 @@ func RunMCPStdioServer(ctx context.Context, configPath, instanceName string) err
 	return server.ServeStdio(s)
 }
 
+func resolveClient(manager *config.Manager, requested, defaultInstance string) (*client.Client, string, error) {
+	target := strings.TrimSpace(requested)
+	if target == "" {
+		target = defaultInstance
+	}
+
+	inst, resolved, err := manager.ResolveInstance(target)
+	if err != nil {
+		return nil, "", err
+	}
+
+	c := client.NewClient(inst.APIKey, inst.VeID)
+	if inst.Endpoint != "" {
+		c.SetBaseURL(inst.Endpoint)
+	}
+	return c, resolved, nil
+}
+
+func callReadOnlyTool[T any](
+	ctx context.Context,
+	manager *config.Manager,
+	requested string,
+	defaultInstance string,
+	action string,
+	call func(context.Context, *client.Client) (T, error),
+	payload func(string, T) map[string]any,
+) (*mcp.CallToolResult, error) {
+	c, resolved, err := resolveClient(manager, requested, defaultInstance)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("resolve instance failed: %v", err)), nil
+	}
+
+	resp, err := call(ctx, c)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("%s failed: %v", action, err)), nil
+	}
+
+	return mcp.NewToolResultStructuredOnly(payload(resolved, resp)), nil
+}
+
+func sshKeysPayload(resolved string, resp *client.SshKeysResponse, full bool) map[string]any {
+	keys := map[string][]string{
+		"veid":      resp.GetShortenedSshKeysVeidSlice(),
+		"user":      resp.GetShortenedSshKeysUserSlice(),
+		"preferred": resp.GetShortenedSshKeysPreferredSlice(),
+	}
+	if full {
+		keys = map[string][]string{
+			"veid":      resp.GetSshKeysVeidSlice(),
+			"user":      resp.GetSshKeysUserSlice(),
+			"preferred": resp.GetSshKeysPreferredSlice(),
+		}
+	}
+
+	return map[string]any{
+		"instance": resolved,
+		"full":     full,
+		"keys":     keys,
+		"totals": map[string]int{
+			"veid":      len(keys["veid"]),
+			"user":      len(keys["user"]),
+			"preferred": len(keys["preferred"]),
+		},
+	}
+}
+
+func availableOSPayload(resolved string, resp *client.AvailableOSResponse) map[string]any {
+	return map[string]any{
+		"instance":        resolved,
+		"installed":       resp.Installed,
+		"templates":       resp.Templates,
+		"total_templates": len(resp.Templates),
+	}
+}
+
+func rateLimitPayload(resolved string, resp *client.RateLimitStatus) map[string]any {
+	return map[string]any{
+		"instance":               resolved,
+		"remaining_points_15min": resp.RemainingPoints15Min,
+		"remaining_points_24h":   resp.RemainingPoints24H,
+	}
+}
+
+func migrationLocationsPayload(resolved string, resp *client.MigrateLocationsResponse) map[string]any {
+	type locationInfo struct {
+		ID                   string `json:"id"`
+		Description          string `json:"description,omitempty"`
+		DataTransferMultiple int    `json:"data_transfer_multiplier,omitempty"`
+		IsCurrent            bool   `json:"is_current"`
+	}
+
+	locations := make([]locationInfo, 0, len(resp.Locations))
+	for _, id := range resp.Locations {
+		locations = append(locations, locationInfo{
+			ID:                   id,
+			Description:          resp.Descriptions[id],
+			DataTransferMultiple: resp.DataTransferMultipliers[id],
+			IsCurrent:            id == resp.CurrentLocation,
+		})
+	}
+
+	return map[string]any{
+		"instance":         resolved,
+		"current_location": resp.CurrentLocation,
+		"locations":        locations,
+		"total":            len(locations),
+	}
+}
+
+func privateIPAvailablePayload(resolved string, resp *client.PrivateIPAvailableResponse) map[string]any {
+	return map[string]any{
+		"instance":      resolved,
+		"available_ips": resp.AvailableIPs,
+		"total":         len(resp.AvailableIPs),
+	}
+}
+
+func suspensionDetailsPayload(resolved string, resp *client.SuspensionDetailsResponse) map[string]any {
+	return map[string]any{
+		"instance":           resolved,
+		"suspension_count":   resp.SuspensionCount,
+		"total_abuse_points": resp.TotalAbusePoints,
+		"max_abuse_points":   resp.MaxAbusePoints,
+		"suspensions":        resp.Suspensions,
+		"evidence":           resp.Evidence,
+	}
+}
+
+func policyViolationsPayload(resolved string, resp *client.PolicyViolationsResponse) map[string]any {
+	return map[string]any{
+		"instance":           resolved,
+		"total_abuse_points": resp.TotalAbusePoints,
+		"max_abuse_points":   resp.MaxAbusePoints,
+		"policy_violations":  resp.PolicyViolations,
+	}
+}
+
+func notificationPreferencesPayload(resolved string, resp *client.NotificationPreferencesResponse) map[string]any {
+	return map[string]any{
+		"instance":             resolved,
+		"notification_email":   resp.NotificationEmail,
+		"email_preferences":    resp.EmailPreferences,
+		"total_categories":     len(resp.EmailPreferences),
+		"total_preference_ids": countNotificationPreferences(resp.EmailPreferences),
+	}
+}
+
+func countNotificationPreferences(prefs map[string]map[string]client.NotificationPreference) int {
+	total := 0
+	for _, category := range prefs {
+		total += len(category)
+	}
+	return total
+}
+
 // registerReadOnlyTools wires read-only tool handlers backed by pkg/client
-func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
+func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager, defaultInstance string) {
 	// vps_info_get
 	s.AddTool(
 		mcp.NewTool(
@@ -79,13 +234,9 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 			requested := req.GetString("instance", "")
 			compact := req.GetBool("compact", false)
 			live := req.GetBool("live", true)
-			inst, resolved, err := manager.ResolveInstance(requested)
+			c, resolved, err := resolveClient(manager, requested, defaultInstance)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("resolve instance failed: %v", err)), nil
-			}
-			c := client.NewClient(inst.APIKey, inst.VeID)
-			if inst.Endpoint != "" {
-				c.SetBaseURL(inst.Endpoint)
 			}
 			if live {
 				info, err := c.GetLiveServiceInfo(ctx)
@@ -157,13 +308,9 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 			daysArg := req.GetInt("days", 0)
 			groupBy := req.GetString("group_by", "day")
 
-			inst, resolved, err := manager.ResolveInstance(requested)
+			c, resolved, err := resolveClient(manager, requested, defaultInstance)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("resolve instance failed: %v", err)), nil
-			}
-			c := client.NewClient(inst.APIKey, inst.VeID)
-			if inst.Endpoint != "" {
-				c.SetBaseURL(inst.Endpoint)
 			}
 			stats, err := c.GetRawUsageStats(ctx)
 			if err != nil {
@@ -379,13 +526,9 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 			order := req.GetString("order", "asc")
 			limit := req.GetInt("limit", 0)
 
-			inst, resolved, err := manager.ResolveInstance(requested)
+			c, resolved, err := resolveClient(manager, requested, defaultInstance)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("resolve instance failed: %v", err)), nil
-			}
-			c := client.NewClient(inst.APIKey, inst.VeID)
-			if inst.Endpoint != "" {
-				c.SetBaseURL(inst.Endpoint)
 			}
 			list, err := c.ListSnapshots(ctx)
 			if err != nil {
@@ -465,13 +608,9 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 			order := req.GetString("order", "desc")
 			limit := req.GetInt("limit", 0)
 
-			inst, resolved, err := manager.ResolveInstance(requested)
+			c, resolved, err := resolveClient(manager, requested, defaultInstance)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("resolve instance failed: %v", err)), nil
-			}
-			c := client.NewClient(inst.APIKey, inst.VeID)
-			if inst.Endpoint != "" {
-				c.SetBaseURL(inst.Endpoint)
 			}
 			resp, err := c.ListBackups(ctx)
 			if err != nil {
@@ -554,13 +693,9 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 			ipContains := strings.TrimSpace(req.GetString("ip_contains", ""))
 			typeFilter := req.GetInt("type", -1)
 
-			inst, resolved, err := manager.ResolveInstance(requested)
+			c, resolved, err := resolveClient(manager, requested, defaultInstance)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("resolve instance failed: %v", err)), nil
-			}
-			c := client.NewClient(inst.APIKey, inst.VeID)
-			if inst.Endpoint != "" {
-				c.SetBaseURL(inst.Endpoint)
 			}
 			logResp, err := c.GetAuditLog(ctx)
 			if err != nil {
@@ -627,13 +762,9 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			requested := req.GetString("instance", "")
 
-			inst, resolved, err := manager.ResolveInstance(requested)
+			c, resolved, err := resolveClient(manager, requested, defaultInstance)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("resolve instance failed: %v", err)), nil
-			}
-			c := client.NewClient(inst.APIKey, inst.VeID)
-			if inst.Endpoint != "" {
-				c.SetBaseURL(inst.Endpoint)
 			}
 			serviceInfo, err := c.GetServiceInfo(ctx)
 			if err != nil {
@@ -656,6 +787,208 @@ func registerReadOnlyTools(s *server.MCPServer, manager *config.Manager) {
 				"total_available": len(serviceInfo.AvailableISOs),
 				"total_mounted":   len(mounted),
 			}), nil
+		},
+	)
+
+	// ssh_keys_get
+	s.AddTool(
+		mcp.NewTool(
+			"ssh_keys_get",
+			mcp.WithDescription("Get SSH public keys for BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+			mcp.WithBoolean("full", mcp.DefaultBool(false), mcp.Description("Return full public keys instead of shortened keys")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+			full := req.GetBool("full", false)
+
+			return callReadOnlyTool(ctx, manager, requested, defaultInstance, "get SSH keys",
+				func(ctx context.Context, c *client.Client) (*client.SshKeysResponse, error) {
+					return c.GetSshKeys(ctx)
+				},
+				func(resolved string, resp *client.SshKeysResponse) map[string]any {
+					return sshKeysPayload(resolved, resp, full)
+				},
+			)
+		},
+	)
+
+	// os_templates_get
+	s.AddTool(
+		mcp.NewTool(
+			"os_templates_get",
+			mcp.WithDescription("List OS templates available for reinstall on BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+
+			return callReadOnlyTool(ctx, manager, requested, defaultInstance, "get OS templates",
+				func(ctx context.Context, c *client.Client) (*client.AvailableOSResponse, error) {
+					return c.GetAvailableOS(ctx)
+				},
+				func(resolved string, resp *client.AvailableOSResponse) map[string]any {
+					return availableOSPayload(resolved, resp)
+				},
+			)
+		},
+	)
+
+	// rate_limit_get
+	s.AddTool(
+		mcp.NewTool(
+			"rate_limit_get",
+			mcp.WithDescription("Get current API rate limit status for BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+
+			return callReadOnlyTool(ctx, manager, requested, defaultInstance, "get rate limit",
+				func(ctx context.Context, c *client.Client) (*client.RateLimitStatus, error) {
+					return c.GetRateLimitStatus(ctx)
+				},
+				func(resolved string, resp *client.RateLimitStatus) map[string]any {
+					return rateLimitPayload(resolved, resp)
+				},
+			)
+		},
+	)
+
+	// migration_locations_get
+	s.AddTool(
+		mcp.NewTool(
+			"migration_locations_get",
+			mcp.WithDescription("List VPS migration locations for BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+
+			return callReadOnlyTool(ctx, manager, requested, defaultInstance, "get migration locations",
+				func(ctx context.Context, c *client.Client) (*client.MigrateLocationsResponse, error) {
+					return c.GetMigrateLocations(ctx)
+				},
+				func(resolved string, resp *client.MigrateLocationsResponse) map[string]any {
+					return migrationLocationsPayload(resolved, resp)
+				},
+			)
+		},
+	)
+
+	// private_ip_available_get
+	s.AddTool(
+		mcp.NewTool(
+			"private_ip_available_get",
+			mcp.WithDescription("List available private IPv4 addresses for BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+
+			return callReadOnlyTool(ctx, manager, requested, defaultInstance, "get available private IPs",
+				func(ctx context.Context, c *client.Client) (*client.PrivateIPAvailableResponse, error) {
+					return c.GetAvailablePrivateIPs(ctx)
+				},
+				func(resolved string, resp *client.PrivateIPAvailableResponse) map[string]any {
+					return privateIPAvailablePayload(resolved, resp)
+				},
+			)
+		},
+	)
+
+	// abuse_suspensions_get
+	s.AddTool(
+		mcp.NewTool(
+			"abuse_suspensions_get",
+			mcp.WithDescription("Get service suspension details and abuse evidence for BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+
+			return callReadOnlyTool(ctx, manager, requested, defaultInstance, "get suspension details",
+				func(ctx context.Context, c *client.Client) (*client.SuspensionDetailsResponse, error) {
+					return c.GetSuspensionDetails(ctx)
+				},
+				func(resolved string, resp *client.SuspensionDetailsResponse) map[string]any {
+					return suspensionDetailsPayload(resolved, resp)
+				},
+			)
+		},
+	)
+
+	// abuse_policy_get
+	s.AddTool(
+		mcp.NewTool(
+			"abuse_policy_get",
+			mcp.WithDescription("Get active policy violations for BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+
+			return callReadOnlyTool(ctx, manager, requested, defaultInstance, "get policy violations",
+				func(ctx context.Context, c *client.Client) (*client.PolicyViolationsResponse, error) {
+					return c.GetPolicyViolations(ctx)
+				},
+				func(resolved string, resp *client.PolicyViolationsResponse) map[string]any {
+					return policyViolationsPayload(resolved, resp)
+				},
+			)
+		},
+	)
+
+	// notification_preferences_get
+	s.AddTool(
+		mcp.NewTool(
+			"notification_preferences_get",
+			mcp.WithDescription("Get KiwiVM notification preferences for BWH/BandwagonHost/搬瓦工/瓦工"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(true),
+			mcp.WithString("instance", mcp.Description("Target instance name; defaults to config default")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			requested := req.GetString("instance", "")
+
+			return callReadOnlyTool(ctx, manager, requested, defaultInstance, "get notification preferences",
+				func(ctx context.Context, c *client.Client) (*client.NotificationPreferencesResponse, error) {
+					return c.GetNotificationPreferences(ctx)
+				},
+				func(resolved string, resp *client.NotificationPreferencesResponse) map[string]any {
+					return notificationPreferencesPayload(resolved, resp)
+				},
+			)
 		},
 	)
 

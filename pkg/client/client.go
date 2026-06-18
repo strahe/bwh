@@ -325,6 +325,36 @@ func (c *Client) GetRateLimitStatus(ctx context.Context) (*RateLimitStatus, erro
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
+// GetSuspensionDetails gets service suspension details and abuse evidence.
+func (c *Client) GetSuspensionDetails(ctx context.Context) (*SuspensionDetailsResponse, error) {
+	var resp SuspensionDetailsResponse
+	if err := c.doRequest(ctx, "getSuspensionDetails", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
+// GetPolicyViolations gets active policy violations.
+func (c *Client) GetPolicyViolations(ctx context.Context) (*PolicyViolationsResponse, error) {
+	var resp PolicyViolationsResponse
+	if err := c.doRequest(ctx, "getPolicyViolations", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
+// GetNotificationPreferences gets KiwiVM notification settings and their state.
+func (c *Client) GetNotificationPreferences(ctx context.Context) (*NotificationPreferencesResponse, error) {
+	var resp NotificationPreferencesResponse
+	if err := c.doRequest(ctx, "kiwivm/getNotificationPreferences", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
 // GetSshKeys gets SSH keys from both Hypervisor Vault and Billing Portal
 func (c *Client) GetSshKeys(ctx context.Context) (*SshKeysResponse, error) {
 	var resp SshKeysResponse

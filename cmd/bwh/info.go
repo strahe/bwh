@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -176,8 +177,9 @@ func displayDetailedInfo(info *client.LiveServiceInfo, instanceName string) {
 	}
 
 	if len(info.IPNullroutes) > 0 {
+		nullrouteIPs := sortedNullrouteIPs(info.IPNullroutes)
 		fmt.Printf("   ⚠️  DDoS Protection  : %d IP(s) currently null-routed\n", len(info.IPNullroutes))
-		fmt.Printf("   Null-routed IPs  : %s\n", strings.Join(info.IPNullroutes, ", "))
+		fmt.Printf("   Null-routed IPs  : %s\n", strings.Join(nullrouteIPs, ", "))
 	}
 
 	if info.IPv6SitTunnelEndpoint != "" {
@@ -442,6 +444,15 @@ func displaySecurityInfo(info *client.ServiceInfo) {
 	} else {
 		fmt.Printf("   Abuse Level      : ✅ 0%% (Clean record)\n")
 	}
+}
+
+func sortedNullrouteIPs(nullroutes client.IPNullroutes) []string {
+	ips := make([]string, 0, len(nullroutes))
+	for ip := range nullroutes {
+		ips = append(ips, ip)
+	}
+	sort.Strings(ips)
+	return ips
 }
 
 // formatBool converts boolean to readable yes/no
