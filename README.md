@@ -30,8 +30,11 @@ bwh node add production --api-key <API_KEY> --veid <VEID>
 
 # Basic operations
 bwh info                              # View server details
+bwh rate-limit                        # Check API rate limit status
 bwh start/stop/restart                # Power management
 bwh usage --period 7d                 # Check usage statistics
+bwh abuse suspensions                 # Show suspension details
+bwh notifications list                # Show notification preferences
 bwh snapshot create "backup-name"     # Create snapshots
 bwh iso images                        # List available ISO images
 bwh iso mount ubuntu-20.04.iso        # Mount ISO for rescue/install
@@ -98,11 +101,15 @@ backups, err := c.ListBackups(ctx)
 
 **Server Management**: `GetServiceInfo`, `GetLiveServiceInfo`, `Start`, `Stop`, `Restart`, `Kill`, `SetHostname`, `ReinstallOS`, `ResetRootPassword`, `MountISO`, `UnmountISO`
 
-**Monitoring**: `GetRawUsageStats`, `GetBasicServiceInfo`, audit log access
+**Monitoring**: `GetRawUsageStats`, `GetAuditLog`, `GetRateLimitStatus`
 
 **Backup & Recovery**: `CreateSnapshot`, `RestoreSnapshot`, `DeleteSnapshot`, backup management
 
 **Migration**: `GetMigrateLocations`, `StartMigration` (use `StartMigrationWithTimeout` for custom timeouts)
+
+**Security & Abuse**: `GetSuspensionDetails`, `GetPolicyViolations`
+
+**Notifications**: `GetNotificationPreferences`
 
 **Network**: SSH key management, IP/reverse DNS configuration, IPv6 subnet management, private IPv4 management
 
@@ -187,7 +194,7 @@ Add to your Continue configuration:
 ### Configuration Notes
 
 - **Custom Config**: Use `--config /path/to/config.yaml` to specify a config file
-- **Multiple Instances**: The server automatically uses your default instance from configuration
+- **Multiple Instances**: The server uses the configured default instance, or `--instance <name>` as the MCP session default. Tool-level `instance` arguments override it.
 - **Integration**: Add to existing MCP config files without replacing other servers
 
 ### Available MCP Tools (Read-only)
@@ -199,6 +206,14 @@ Add to your Continue configuration:
 - **backup_list**: List backups (`instance?`, `os_contains?`, `since?`, `until?`, `sort_by?`, `order?`, `limit?`)
 - **vps_audit_get**: Get audit logs (`instance?`, `since?`, `until?`, `limit?`, `ip_contains?`, `type?`)
 - **iso_list**: List available and mounted ISO images (`instance?`)
+- **ssh_keys_get**: Get SSH public keys (`instance?`, `full?`)
+- **os_templates_get**: List OS templates (`instance?`)
+- **rate_limit_get**: Get API rate limit status (`instance?`)
+- **migration_locations_get**: List migration locations (`instance?`)
+- **private_ip_available_get**: List available private IPv4 addresses (`instance?`)
+- **abuse_suspensions_get**: Get suspension details (`instance?`)
+- **abuse_policy_get**: Get policy violations (`instance?`)
+- **notification_preferences_get**: Get notification preferences (`instance?`)
 
 All MCP tools are safe, read-only operations that won't modify your VPS configuration or data.
 
@@ -228,6 +243,8 @@ iso             Manage ISO images for VPS boot
 reinstall       Reinstall VPS operating system (WARNING: destroys all data)
 usage           Display detailed VPS usage statistics
 audit           Display audit log entries
+abuse           Display suspension details and policy violations
+notifications   Display KiwiVM notification preferences
 reset-password  Reset the root password
 snapshot        Manage VPS snapshots
 backup          Manage VPS backups

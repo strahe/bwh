@@ -30,8 +30,11 @@ bwh node add production --api-key <API_KEY> --veid <VEID>
 
 # 基本操作
 bwh info                              # 查看服务器详情
+bwh rate-limit                        # 检查 API 限制状态
 bwh start/stop/restart                # 电源管理
 bwh usage --period 7d                 # 检查使用统计
+bwh abuse suspensions                 # 查看暂停详情
+bwh notifications list                # 查看通知偏好
 bwh snapshot create "备份名称"         # 创建快照
 bwh iso images                        # 列出可用 ISO 镜像
 bwh iso mount ubuntu-20.04.iso        # 挂载 ISO 用于救援/安装
@@ -98,11 +101,15 @@ backups, err := c.ListBackups(ctx)
 
 **服务器管理**: `GetServiceInfo`、`GetLiveServiceInfo`、`Start`、`Stop`、`Restart`、`Kill`、`SetHostname`、`ReinstallOS`、`ResetRootPassword`、`MountISO`、`UnmountISO`
 
-**监控**: `GetRawUsageStats`、`GetBasicServiceInfo`、审计日志访问
+**监控**: `GetRawUsageStats`、`GetAuditLog`、`GetRateLimitStatus`
 
 **备份和恢复**: `CreateSnapshot`、`RestoreSnapshot`、`DeleteSnapshot`、备份管理
 
 **迁移**: `GetMigrateLocations`、`StartMigration`（支持 `StartMigrationWithTimeout` 自定义超时）
+
+**安全与 abuse**: `GetSuspensionDetails`、`GetPolicyViolations`
+
+**通知**: `GetNotificationPreferences`
 
 **网络**: SSH 密钥管理、IP/反向 DNS 配置、IPv6 子网管理、私有 IPv4 管理
 
@@ -187,7 +194,7 @@ claude mcp add bwh -- bwh mcp serve
 ### 配置说明
 
 - **自定义配置**: 使用 `--config /path/to/config.yaml` 指定配置文件
-- **多实例**: 服务器自动使用配置中的默认实例
+- **多实例**: 服务器使用配置中的默认实例，或使用 `--instance <name>` 作为 MCP 会话默认实例。工具级 `instance` 参数可覆盖该默认值。
 - **集成**: 添加到现有 MCP 配置文件中，不替换其他服务器
 
 ### 可用工具
@@ -199,6 +206,14 @@ claude mcp add bwh -- bwh mcp serve
 - **backup_list**: 列出备份 (`instance?`, `os_contains?`, `since?`, `until?`, `sort_by?`, `order?`, `limit?`)
 - **vps_audit_get**: 获取审计日志 (`instance?`, `since?`, `until?`, `limit?`, `ip_contains?`, `type?`)
 - **iso_list**: 列出可用和已挂载的 ISO 镜像 (`instance?`)
+- **ssh_keys_get**: 获取 SSH 公钥 (`instance?`, `full?`)
+- **os_templates_get**: 列出系统模板 (`instance?`)
+- **rate_limit_get**: 获取 API 限制状态 (`instance?`)
+- **migration_locations_get**: 列出迁移位置 (`instance?`)
+- **private_ip_available_get**: 列出可用私有 IPv4 地址 (`instance?`)
+- **abuse_suspensions_get**: 获取暂停详情 (`instance?`)
+- **abuse_policy_get**: 获取策略违规 (`instance?`)
+- **notification_preferences_get**: 获取通知偏好 (`instance?`)
 
 所有 MCP 工具都是安全的只读操作，不会修改您的 VPS 配置或数据。
 
@@ -228,6 +243,8 @@ iso             管理 VPS 启动用 ISO 镜像
 reinstall       重装 VPS 操作系统（警告：摧毁所有数据）
 usage           显示详细 VPS 使用统计
 audit           显示审计日志条目
+abuse           显示暂停详情与策略违规
+notifications   显示 KiwiVM 通知偏好
 reset-password  重置 root 密码
 snapshot        管理 VPS 快照
 backup          管理 VPS 备份

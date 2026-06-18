@@ -44,11 +44,11 @@ type ServiceInfo struct {
 	DataNextReset         int64 `json:"data_next_reset"`         // Date and time of transfer counter reset (UNIX timestamp)
 
 	// Network Configuration
-	IPAddresses           []string `json:"ip_addresses"`             // IPv4 addresses and IPv6 /64 subnets assigned to VPS
-	IPv6SitTunnelEndpoint string   `json:"ipv6_sit_tunnel_endpoint"` // IPv6 SIT tunnel endpoint
-	PrivateIPAddresses    []string `json:"private_ip_addresses"`     // Private IPv4 addresses assigned to VPS
-	IPNullroutes          []string `json:"ip_nullroutes"`            // Information on IP address nullrouting during (D)DoS attacks
-	PlanMaxIPv6s          int      `json:"plan_max_ipv6s"`           // Maximum number of IPv6 /64 subnets allowed by plan
+	IPAddresses           []string     `json:"ip_addresses"`             // IPv4 addresses and IPv6 /64 subnets assigned to VPS
+	IPv6SitTunnelEndpoint string       `json:"ipv6_sit_tunnel_endpoint"` // IPv6 SIT tunnel endpoint
+	PrivateIPAddresses    []string     `json:"private_ip_addresses"`     // Private IPv4 addresses assigned to VPS
+	IPNullroutes          IPNullroutes `json:"ip_nullroutes"`            // Information on IP address nullrouting during (D)DoS attacks
+	PlanMaxIPv6s          int          `json:"plan_max_ipv6s"`           // Maximum number of IPv6 /64 subnets allowed by plan
 
 	// ISO Images
 	ISO1          string   `json:"iso1"`           // Mounted image #1
@@ -74,6 +74,42 @@ type ServiceInfo struct {
 type CreateSnapshotResponse struct {
 	BaseResponse
 	NotificationEmail string `json:"notificationEmail"`
+}
+
+// IPNullrouteInfo contains details for a null-routed IP address.
+type IPNullrouteInfo struct {
+	NullrouteTimestamp       int64  `json:"nullroute_timestamp"`
+	NullrouteDurationSeconds int    `json:"nullroute_duration_s"`
+	Log                      string `json:"log"`
+}
+
+// IPNullroutes maps IP addresses to their nullroute details.
+type IPNullroutes map[string]IPNullrouteInfo
+
+// UnmarshalJSON supports KiwiVM's empty-array response and non-empty object response.
+func (n *IPNullroutes) UnmarshalJSON(data []byte) error {
+	if strings.TrimSpace(string(data)) == "null" {
+		*n = nil
+		return nil
+	}
+
+	var routes map[string]IPNullrouteInfo
+	if err := json.Unmarshal(data, &routes); err == nil {
+		*n = routes
+		return nil
+	}
+
+	var ips []string
+	if err := json.Unmarshal(data, &ips); err != nil {
+		return err
+	}
+
+	routes = make(map[string]IPNullrouteInfo, len(ips))
+	for _, ip := range ips {
+		routes[ip] = IPNullrouteInfo{}
+	}
+	*n = routes
+	return nil
 }
 
 // FlexibleInt is a type that can unmarshal both string and int from JSON
@@ -218,6 +254,59 @@ type RateLimitStatus struct {
 	BaseResponse
 	RemainingPoints15Min int `json:"remaining_points_15min"` // API calls remaining in 15-minute window
 	RemainingPoints24H   int `json:"remaining_points_24h"`   // API calls remaining in 24-hour window
+}
+
+// SuspensionRecord describes an outstanding service suspension issue.
+type SuspensionRecord struct {
+	RecordID         int    `json:"record_id"`
+	Flag             string `json:"flag"`
+	IsSoft           int    `json:"is_soft"`
+	EvidenceRecordID int    `json:"evidence_record_id"`
+	AbusePoints      int    `json:"abuse_points"`
+}
+
+// SuspensionDetailsResponse represents the response from getSuspensionDetails.
+type SuspensionDetailsResponse struct {
+	BaseResponse
+	SuspensionCount  int                `json:"suspension_count"`
+	TotalAbusePoints int                `json:"total_abuse_points"`
+	MaxAbusePoints   int                `json:"max_abuse_points"`
+	Suspensions      []SuspensionRecord `json:"suspensions,omitempty"`
+	Evidence         map[string]string  `json:"evidence,omitempty"`
+}
+
+// PolicyViolationRecord describes an unresolved policy violation.
+type PolicyViolationRecord struct {
+	RecordID     int    `json:"record_id"`
+	Timestamp    int64  `json:"timestamp"`
+	SuspendAt    int64  `json:"suspend_at"`
+	Flag         string `json:"flag"`
+	IsSoft       int    `json:"is_soft"`
+	AbusePoints  int    `json:"abuse_points"`
+	EvidenceData string `json:"evidence_data"`
+}
+
+// PolicyViolationsResponse represents the response from getPolicyViolations.
+type PolicyViolationsResponse struct {
+	BaseResponse
+	TotalAbusePoints int                     `json:"total_abuse_points"`
+	MaxAbusePoints   int                     `json:"max_abuse_points"`
+	PolicyViolations []PolicyViolationRecord `json:"policy_violations,omitempty"`
+}
+
+// NotificationPreference describes a KiwiVM e-mail notification preference.
+type NotificationPreference struct {
+	FriendlyDescription string `json:"friendly_description"`
+	IsEnabled           int    `json:"is_enabled"`
+	ChangedTimestamp    int64  `json:"changed_timestamp"`
+	SValue              string `json:"s_value"`
+}
+
+// NotificationPreferencesResponse represents notification settings and their state.
+type NotificationPreferencesResponse struct {
+	BaseResponse
+	EmailPreferences  map[string]map[string]NotificationPreference `json:"email_preferences"`
+	NotificationEmail string                                       `json:"notificationEmail"`
 }
 
 // SshKeysResponse represents the response from getSshKeys API call

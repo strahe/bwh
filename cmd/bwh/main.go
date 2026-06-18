@@ -52,6 +52,8 @@ func main() {
 			reinstallCmd,
 			usageCmd,
 			auditCmd,
+			abuseCmd,
+			notificationsCmd,
 			resetPasswordCmd,
 			snapshotCmd,
 			backupCmd,

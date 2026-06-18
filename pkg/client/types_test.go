@@ -126,6 +126,67 @@ func TestBaseResponse(t *testing.T) {
 	}
 }
 
+func TestIPNullroutes_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  IPNullroutes
+	}{
+		{
+			name:  "empty array",
+			input: `[]`,
+			want:  IPNullroutes{},
+		},
+		{
+			name: "object keyed by IP",
+			input: `{
+				"192.0.2.10": {
+					"nullroute_timestamp": 1710000000,
+					"nullroute_duration_s": 3600,
+					"log": "Nullroute active"
+				}
+			}`,
+			want: IPNullroutes{
+				"192.0.2.10": {
+					NullrouteTimestamp:       1710000000,
+					NullrouteDurationSeconds: 3600,
+					Log:                      "Nullroute active",
+				},
+			},
+		},
+		{
+			name:  "legacy string array",
+			input: `["192.0.2.20"]`,
+			want: IPNullroutes{
+				"192.0.2.20": {},
+			},
+		},
+		{
+			name:  "null",
+			input: `null`,
+			want:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got IPNullroutes
+			if err := json.Unmarshal([]byte(tt.input), &got); err != nil {
+				t.Fatalf("IPNullroutes unmarshal error = %v", err)
+			}
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("IPNullroutes length = %d, want %d", len(got), len(tt.want))
+			}
+			for ip, want := range tt.want {
+				if got[ip] != want {
+					t.Errorf("IPNullroutes[%s] = %+v, want %+v", ip, got[ip], want)
+				}
+			}
+		})
+	}
+}
+
 func TestServiceInfo_JSONParsing(t *testing.T) {
 	// Test parsing a minimal ServiceInfo response
 	input := `{
