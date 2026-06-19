@@ -355,6 +355,87 @@ func (c *Client) GetNotificationPreferences(ctx context.Context) (*NotificationP
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
+// Unsuspend clears a soft abuse issue and unsuspends the VPS.
+func (c *Client) Unsuspend(ctx context.Context, recordID int) error {
+	if err := validatePositiveRecordID(recordID); err != nil {
+		return err
+	}
+
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "unsuspend", map[string]string{
+		"record_id": fmt.Sprintf("%d", recordID),
+	}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyErrorFromBase(resp)
+}
+
+// ResolvePolicyViolation marks a policy violation as resolved.
+func (c *Client) ResolvePolicyViolation(ctx context.Context, recordID int) error {
+	if err := validatePositiveRecordID(recordID); err != nil {
+		return err
+	}
+
+	var resp BaseResponse
+	if err := c.doRequest(ctx, "resolvePolicyViolation", map[string]string{
+		"record_id": fmt.Sprintf("%d", recordID),
+	}, &resp); err != nil {
+		return err
+	}
+
+	return wrapOnlyErrorFromBase(resp)
+}
+
+// SetNotificationPreferences updates KiwiVM notification preferences.
+func (c *Client) SetNotificationPreferences(ctx context.Context, preferences map[string]bool) (*SetNotificationPreferencesResponse, error) {
+	encoded, err := encodeNotificationPreferences(preferences)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp SetNotificationPreferencesResponse
+	if err := c.doRequest(ctx, "kiwivm/setNotificationPreferences", map[string]string{
+		"json_notification_preferences": encoded,
+	}, &resp); err != nil {
+		return nil, err
+	}
+
+	return wrapErrorWithBase(&resp, resp.BaseResponse)
+}
+
+func validatePositiveRecordID(recordID int) error {
+	if recordID <= 0 {
+		return fmt.Errorf("record_id must be a positive integer")
+	}
+	return nil
+}
+
+func encodeNotificationPreferences(preferences map[string]bool) (string, error) {
+	if len(preferences) == 0 {
+		return "", fmt.Errorf("at least one notification preference is required")
+	}
+
+	payload := make(map[string]int, len(preferences))
+	for id, enabled := range preferences {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			return "", fmt.Errorf("notification preference id cannot be empty")
+		}
+		if enabled {
+			payload[trimmed] = 1
+		} else {
+			payload[trimmed] = 0
+		}
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode notification preferences: %w", err)
+	}
+	return string(data), nil
+}
+
 // GetSshKeys gets SSH keys from both Hypervisor Vault and Billing Portal
 func (c *Client) GetSshKeys(ctx context.Context) (*SshKeysResponse, error) {
 	var resp SshKeysResponse

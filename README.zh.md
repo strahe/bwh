@@ -35,6 +35,7 @@ bwh start/stop/restart                # 电源管理
 bwh usage --period 7d                 # 检查使用统计
 bwh abuse suspensions                 # 查看暂停详情
 bwh notifications list                # 查看通知偏好
+bwh notifications set <id> on --dry-run # 预览通知偏好修改
 bwh snapshot create "备份名称"         # 创建快照
 bwh iso images                        # 列出可用 ISO 镜像
 bwh iso mount ubuntu-20.04.iso        # 挂载 ISO 用于救援/安装
@@ -107,9 +108,9 @@ backups, err := c.ListBackups(ctx)
 
 **迁移**: `GetMigrateLocations`、`StartMigration`（支持 `StartMigrationWithTimeout` 自定义超时）
 
-**安全与 abuse**: `GetSuspensionDetails`、`GetPolicyViolations`
+**安全与 abuse**: `GetSuspensionDetails`、`GetPolicyViolations`、`Unsuspend`、`ResolvePolicyViolation`
 
-**通知**: `GetNotificationPreferences`
+**通知**: `GetNotificationPreferences`、`SetNotificationPreferences`
 
 **网络**: SSH 密钥管理、IP/反向 DNS 配置、IPv6 子网管理、私有 IPv4 管理
 
@@ -243,8 +244,8 @@ iso             管理 VPS 启动用 ISO 镜像
 reinstall       重装 VPS 操作系统（警告：摧毁所有数据）
 usage           显示详细 VPS 使用统计
 audit           显示审计日志条目
-abuse           显示暂停详情与策略违规
-notifications   显示 KiwiVM 通知偏好
+abuse           显示并处理暂停详情与策略违规
+notifications   显示并更新 KiwiVM 通知偏好
 reset-password  重置 root 密码
 snapshot        管理 VPS 快照
 backup          管理 VPS 备份
@@ -257,6 +258,16 @@ completion      生成 shell 自动补全脚本
 ```
 
 使用 `bwh <command> --help` 查看每个命令的详细选项和用法示例。
+
+### Abuse 与通知写命令
+
+```bash
+bwh abuse unsuspend <record_id> --dry-run
+bwh abuse resolve-policy <record_id> --dry-run
+bwh notifications set <preference_id> <on|off> --dry-run
+```
+
+使用 `--dry-run` 做校验和预览，不调用写 API。确认需要跳过 y/N 提示时再加 `--yes`。
 
 ## 构建
 
