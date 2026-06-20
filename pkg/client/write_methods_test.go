@@ -73,6 +73,12 @@ func TestClient_WriteMethods_InvalidInput(t *testing.T) {
 	if _, err := c.SetNotificationPreferences(context.Background(), map[string]bool{" ": true}); err == nil {
 		t.Fatal("SetNotificationPreferences() error = nil, want empty preference id error")
 	}
+	if _, err := encodeNotificationPreferences(map[string]bool{
+		"security-successful-login":   true,
+		" security-successful-login ": false,
+	}); err == nil {
+		t.Fatal("encodeNotificationPreferences() error = nil, want duplicate preference id error")
+	}
 }
 
 func TestClient_SetNotificationPreferences_Mock(t *testing.T) {

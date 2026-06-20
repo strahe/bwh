@@ -422,6 +422,9 @@ func encodeNotificationPreferences(preferences map[string]bool) (string, error) 
 		if trimmed == "" {
 			return "", fmt.Errorf("notification preference id cannot be empty")
 		}
+		if _, exists := payload[trimmed]; exists {
+			return "", fmt.Errorf("duplicate notification preference id after trimming: %s", trimmed)
+		}
 		if enabled {
 			payload[trimmed] = 1
 		} else {
