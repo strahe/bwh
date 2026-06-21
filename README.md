@@ -100,6 +100,8 @@ backups, err := c.ListBackups(ctx)
 
 ### Available Methods
 
+The SDK sends read-only API calls with `GET` query parameters and state-changing API calls with `POST application/x-www-form-urlencoded` form data, so write parameters and credentials are not placed in the URL.
+
 **Server Management**: `GetServiceInfo`, `GetLiveServiceInfo`, `Start`, `Stop`, `Restart`, `Kill`, `SetHostname`, `ReinstallOS`, `ResetRootPassword`, `MountISO`, `UnmountISO`
 
 **Monitoring**: `GetRawUsageStats`, `GetAuditLog`, `GetRateLimitStatus`

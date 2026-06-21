@@ -70,7 +70,7 @@ func (c *Client) CreateSnapshot(ctx context.Context, description string) (*Creat
 	}
 
 	var resp CreateSnapshotResponse
-	if err := c.doRequest(ctx, "snapshot/create", params, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "snapshot/create", params, &resp); err != nil {
 		return nil, err
 	}
 
@@ -90,7 +90,7 @@ func (c *Client) ListSnapshots(ctx context.Context) (*SnapshotListResponse, erro
 // DeleteSnapshot deletes a snapshot by fileName
 func (c *Client) DeleteSnapshot(ctx context.Context, fileName string) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "snapshot/delete", map[string]string{"snapshot": fileName}, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "snapshot/delete", map[string]string{"snapshot": fileName}, &resp); err != nil {
 		return err
 	}
 
@@ -100,7 +100,7 @@ func (c *Client) DeleteSnapshot(ctx context.Context, fileName string) error {
 // RestoreSnapshot restores a snapshot by fileName (overwrites all data on VPS)
 func (c *Client) RestoreSnapshot(ctx context.Context, fileName string) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "snapshot/restore", map[string]string{"snapshot": fileName}, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "snapshot/restore", map[string]string{"snapshot": fileName}, &resp); err != nil {
 		return err
 	}
 
@@ -115,7 +115,7 @@ func (c *Client) ToggleSnapshotSticky(ctx context.Context, fileName string, stic
 	}
 
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "snapshot/toggleSticky", map[string]string{
+	if err := c.doPostRequest(ctx, "snapshot/toggleSticky", map[string]string{
 		"snapshot": fileName,
 		"sticky":   stickyStr,
 	}, &resp); err != nil {
@@ -128,7 +128,7 @@ func (c *Client) ToggleSnapshotSticky(ctx context.Context, fileName string, stic
 // ExportSnapshot generates a token for transferring snapshot to another instance
 func (c *Client) ExportSnapshot(ctx context.Context, fileName string) (*SnapshotExportResponse, error) {
 	var resp SnapshotExportResponse
-	if err := c.doRequest(ctx, "snapshot/export", map[string]string{"snapshot": fileName}, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "snapshot/export", map[string]string{"snapshot": fileName}, &resp); err != nil {
 		return nil, err
 	}
 
@@ -138,7 +138,7 @@ func (c *Client) ExportSnapshot(ctx context.Context, fileName string) (*Snapshot
 // ImportSnapshot imports a snapshot from another instance using VEID and token
 func (c *Client) ImportSnapshot(ctx context.Context, sourceVeid, sourceToken string) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "snapshot/import", map[string]string{
+	if err := c.doPostRequest(ctx, "snapshot/import", map[string]string{
 		"sourceVeid":  sourceVeid,
 		"sourceToken": sourceToken,
 	}, &resp); err != nil {
@@ -151,7 +151,7 @@ func (c *Client) ImportSnapshot(ctx context.Context, sourceVeid, sourceToken str
 // Restart restarts the VPS
 func (c *Client) Restart(ctx context.Context) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "restart", nil, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "restart", nil, &resp); err != nil {
 		return err
 	}
 
@@ -161,7 +161,7 @@ func (c *Client) Restart(ctx context.Context) error {
 // Start starts the VPS
 func (c *Client) Start(ctx context.Context) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "start", nil, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "start", nil, &resp); err != nil {
 		return err
 	}
 
@@ -171,7 +171,7 @@ func (c *Client) Start(ctx context.Context) error {
 // Stop stops the VPS
 func (c *Client) Stop(ctx context.Context) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "stop", nil, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "stop", nil, &resp); err != nil {
 		return err
 	}
 
@@ -182,7 +182,7 @@ func (c *Client) Stop(ctx context.Context) error {
 // Please use this feature with great care as any unsaved data will be lost.
 func (c *Client) Kill(ctx context.Context) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "kill", nil, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "kill", nil, &resp); err != nil {
 		return err
 	}
 
@@ -203,7 +203,7 @@ func (c *Client) GetAvailableOS(ctx context.Context) (*AvailableOSResponse, erro
 // WARNING: This will destroy all data on the VPS!
 func (c *Client) ReinstallOS(ctx context.Context, osTemplate string) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "reinstallOS", map[string]string{"os": osTemplate}, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "reinstallOS", map[string]string{"os": osTemplate}, &resp); err != nil {
 		return err
 	}
 
@@ -233,7 +233,7 @@ func (c *Client) GetAuditLog(ctx context.Context) (*AuditLogResponse, error) {
 // ResetRootPassword resets the root password and returns the new password
 func (c *Client) ResetRootPassword(ctx context.Context) (*ResetRootPasswordResponse, error) {
 	var resp ResetRootPasswordResponse
-	if err := c.doRequest(ctx, "resetRootPassword", nil, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "resetRootPassword", nil, &resp); err != nil {
 		return nil, err
 	}
 
@@ -247,13 +247,7 @@ func (c *Client) doRequest(ctx context.Context, endpoint string, params map[stri
 		return fmt.Errorf("failed to parse URL: %w", err)
 	}
 
-	q := u.Query()
-	q.Set("veid", c.veid)
-	q.Set("api_key", c.apiKey)
-
-	for k, v := range params {
-		q.Set(k, v)
-	}
+	q := c.requestValues(params)
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -261,10 +255,41 @@ func (c *Client) doRequest(ctx context.Context, endpoint string, params map[stri
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
+	return c.executeRequest(c.httpClient, req, result)
+}
+
+// doPostRequest performs a generic API POST form request.
+func (c *Client) doPostRequest(ctx context.Context, endpoint string, params map[string]string, result any) error {
+	u, err := url.Parse(c.baseURL + "/" + endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	form := c.requestValues(params)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), strings.NewReader(form.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	return c.executeRequest(c.httpClient, req, result)
+}
+
+func (c *Client) requestValues(params map[string]string) url.Values {
+	values := url.Values{}
+	values.Set("veid", c.veid)
+	values.Set("api_key", c.apiKey)
+	for k, v := range params {
+		values.Set(k, v)
+	}
+	return values
+}
+
+func (c *Client) executeRequest(httpClient *http.Client, req *http.Request, result any) error {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", version.GetUserAgent())
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -294,7 +319,7 @@ func (c *Client) ListBackups(ctx context.Context) (*BackupListResponse, error) {
 // CopyBackupToSnapshot copies a backup to a restorable snapshot
 func (c *Client) CopyBackupToSnapshot(ctx context.Context, backupToken string) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "backup/copyToSnapshot", map[string]string{
+	if err := c.doPostRequest(ctx, "backup/copyToSnapshot", map[string]string{
 		"backupToken": backupToken,
 	}, &resp); err != nil {
 		return err
@@ -306,7 +331,7 @@ func (c *Client) CopyBackupToSnapshot(ctx context.Context, backupToken string) e
 // SetHostname sets a new hostname for the VPS
 func (c *Client) SetHostname(ctx context.Context, newHostname string) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "setHostname", map[string]string{
+	if err := c.doPostRequest(ctx, "setHostname", map[string]string{
 		"newHostname": newHostname,
 	}, &resp); err != nil {
 		return err
@@ -362,7 +387,7 @@ func (c *Client) Unsuspend(ctx context.Context, recordID int) error {
 	}
 
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "unsuspend", map[string]string{
+	if err := c.doPostRequest(ctx, "unsuspend", map[string]string{
 		"record_id": fmt.Sprintf("%d", recordID),
 	}, &resp); err != nil {
 		return err
@@ -378,7 +403,7 @@ func (c *Client) ResolvePolicyViolation(ctx context.Context, recordID int) error
 	}
 
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "resolvePolicyViolation", map[string]string{
+	if err := c.doPostRequest(ctx, "resolvePolicyViolation", map[string]string{
 		"record_id": fmt.Sprintf("%d", recordID),
 	}, &resp); err != nil {
 		return err
@@ -395,7 +420,7 @@ func (c *Client) SetNotificationPreferences(ctx context.Context, preferences map
 	}
 
 	var resp SetNotificationPreferencesResponse
-	if err := c.doRequest(ctx, "kiwivm/setNotificationPreferences", map[string]string{
+	if err := c.doPostRequest(ctx, "kiwivm/setNotificationPreferences", map[string]string{
 		"json_notification_preferences": encoded,
 	}, &resp); err != nil {
 		return nil, err
@@ -461,7 +486,7 @@ func (c *Client) UpdateSshKeys(ctx context.Context, sshKeys []string) error {
 	}
 
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "updateSshKeys", params, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "updateSshKeys", params, &resp); err != nil {
 		return err
 	}
 
@@ -471,7 +496,7 @@ func (c *Client) UpdateSshKeys(ctx context.Context, sshKeys []string) error {
 // SetPTR sets new PTR (rDNS) record for IP address
 func (c *Client) SetPTR(ctx context.Context, ip, ptr string) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "setPTR", map[string]string{
+	if err := c.doPostRequest(ctx, "setPTR", map[string]string{
 		"ip":  ip,
 		"ptr": ptr,
 	}, &resp); err != nil {
@@ -485,7 +510,7 @@ func (c *Client) SetPTR(ctx context.Context, ip, ptr string) error {
 // VM must be completely shut down and restarted after this API call
 func (c *Client) MountISO(ctx context.Context, iso string) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "iso/mount", map[string]string{
+	if err := c.doPostRequest(ctx, "iso/mount", map[string]string{
 		"iso": iso,
 	}, &resp); err != nil {
 		return err
@@ -498,7 +523,7 @@ func (c *Client) MountISO(ctx context.Context, iso string) error {
 // VM must be completely shut down and restarted after this API call
 func (c *Client) UnmountISO(ctx context.Context) error {
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "iso/unmount", nil, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "iso/unmount", nil, &resp); err != nil {
 		return err
 	}
 
@@ -528,57 +553,33 @@ func (c *Client) StartMigrationWithTimeout(ctx context.Context, locationID strin
 		"location": locationID,
 	}
 	var resp MigrateStartResponse
-	if err := c.doRequestWithTimeout(ctx, "migrate/start", params, &resp, timeout); err != nil {
+	if err := c.doPostRequestWithTimeout(ctx, "migrate/start", params, &resp, timeout); err != nil {
 		return nil, err
 	}
 
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// doRequestWithTimeout performs a generic API request using a custom timeout for long-running operations
-func (c *Client) doRequestWithTimeout(ctx context.Context, endpoint string, params map[string]string, result any, timeout time.Duration) error {
+// doPostRequestWithTimeout performs a generic POST form request using a custom timeout.
+func (c *Client) doPostRequestWithTimeout(ctx context.Context, endpoint string, params map[string]string, result any, timeout time.Duration) error {
 	u, err := url.Parse(c.baseURL + "/" + endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL: %w", err)
 	}
 
-	q := u.Query()
-	q.Set("veid", c.veid)
-	q.Set("api_key", c.apiKey)
-
-	for k, v := range params {
-		q.Set(k, v)
-	}
-	u.RawQuery = q.Encode()
-
 	// Apply context deadline as well as client timeout
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctxWithTimeout, http.MethodGet, u.String(), nil)
+	form := c.requestValues(params)
+	req, err := http.NewRequestWithContext(ctxWithTimeout, http.MethodPost, u.String(), strings.NewReader(form.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", version.GetUserAgent())
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	customClient := &http.Client{Timeout: timeout}
-	resp, err := customClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API request failed with status: %d %s", resp.StatusCode, resp.Status)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return nil
+	return c.executeRequest(customClient, req, result)
 }
 
 // wrapError wraps a response with error checking - returns (result, error)
@@ -634,7 +635,7 @@ func wrapOnlyErrorFromBase(base BaseResponse) error {
 // AddIPv6 assigns a new IPv6 /64 subnet to the VPS
 func (c *Client) AddIPv6(ctx context.Context) (*IPv6AddResponse, error) {
 	var resp IPv6AddResponse
-	if err := c.doRequest(ctx, "ipv6/add", nil, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "ipv6/add", nil, &resp); err != nil {
 		return nil, err
 	}
 
@@ -648,7 +649,7 @@ func (c *Client) DeleteIPv6(ctx context.Context, subnet string) error {
 	}
 
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "ipv6/delete", params, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "ipv6/delete", params, &resp); err != nil {
 		return err
 	}
 
@@ -673,7 +674,7 @@ func (c *Client) AssignPrivateIP(ctx context.Context, ip string) (*PrivateIPAssi
 	}
 
 	var resp PrivateIPAssignResponse
-	if err := c.doRequest(ctx, "privateIp/assign", params, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "privateIp/assign", params, &resp); err != nil {
 		return nil, err
 	}
 
@@ -687,7 +688,7 @@ func (c *Client) DeletePrivateIP(ctx context.Context, ip string) error {
 	}
 
 	var resp BaseResponse
-	if err := c.doRequest(ctx, "privateIp/delete", params, &resp); err != nil {
+	if err := c.doPostRequest(ctx, "privateIp/delete", params, &resp); err != nil {
 		return err
 	}
 
