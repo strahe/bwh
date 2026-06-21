@@ -35,6 +35,7 @@ bwh start/stop/restart                # Power management
 bwh usage --period 7d                 # Check usage statistics
 bwh abuse suspensions                 # Show suspension details
 bwh notifications list                # Show notification preferences
+bwh notifications set <id> on --dry-run # Preview notification changes
 bwh snapshot create "backup-name"     # Create snapshots
 bwh iso images                        # List available ISO images
 bwh iso mount ubuntu-20.04.iso        # Mount ISO for rescue/install
@@ -107,9 +108,9 @@ backups, err := c.ListBackups(ctx)
 
 **Migration**: `GetMigrateLocations`, `StartMigration` (use `StartMigrationWithTimeout` for custom timeouts)
 
-**Security & Abuse**: `GetSuspensionDetails`, `GetPolicyViolations`
+**Security & Abuse**: `GetSuspensionDetails`, `GetPolicyViolations`, `Unsuspend`, `ResolvePolicyViolation`
 
-**Notifications**: `GetNotificationPreferences`
+**Notifications**: `GetNotificationPreferences`, `SetNotificationPreferences`
 
 **Network**: SSH key management, IP/reverse DNS configuration, IPv6 subnet management, private IPv4 management
 
@@ -243,8 +244,8 @@ iso             Manage ISO images for VPS boot
 reinstall       Reinstall VPS operating system (WARNING: destroys all data)
 usage           Display detailed VPS usage statistics
 audit           Display audit log entries
-abuse           Display suspension details and policy violations
-notifications   Display KiwiVM notification preferences
+abuse           Display and resolve suspension details and policy violations
+notifications   Display and update KiwiVM notification preferences
 reset-password  Reset the root password
 snapshot        Manage VPS snapshots
 backup          Manage VPS backups
@@ -257,6 +258,16 @@ completion      Generate shell completion script
 ```
 
 Use `bwh <command> --help` to view detailed options and usage examples for each command.
+
+### Abuse and Notification Writes
+
+```bash
+bwh abuse unsuspend <record_id> --dry-run
+bwh abuse resolve-policy <record_id> --dry-run
+bwh notifications set <preference_id> <on|off> --dry-run
+```
+
+Use `--dry-run` to validate and preview without calling write APIs. Add `--yes` only when you want to skip the y/N prompt.
 
 ## Build
 

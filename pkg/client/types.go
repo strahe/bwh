@@ -309,6 +309,65 @@ type NotificationPreferencesResponse struct {
 	NotificationEmail string                                       `json:"notificationEmail"`
 }
 
+// NotificationPreferenceStateMap maps preference IDs to enabled states.
+type NotificationPreferenceStateMap map[string]int
+
+// UnmarshalJSON supports KiwiVM's PHP empty-array response for associative maps.
+func (m *NotificationPreferenceStateMap) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "null" {
+		*m = nil
+		return nil
+	}
+	if trimmed == "[]" {
+		*m = NotificationPreferenceStateMap{}
+		return nil
+	}
+
+	values := map[string]FlexibleInt{}
+	if err := json.Unmarshal(data, &values); err != nil {
+		return err
+	}
+
+	result := make(NotificationPreferenceStateMap, len(values))
+	for id, value := range values {
+		result[id] = int(value.Value)
+	}
+	*m = result
+	return nil
+}
+
+// NotificationPreferenceDescriptionMap maps preference IDs to descriptions.
+type NotificationPreferenceDescriptionMap map[string]string
+
+// UnmarshalJSON supports KiwiVM's PHP empty-array response for associative maps.
+func (m *NotificationPreferenceDescriptionMap) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "null" {
+		*m = nil
+		return nil
+	}
+	if trimmed == "[]" {
+		*m = NotificationPreferenceDescriptionMap{}
+		return nil
+	}
+
+	values := map[string]string{}
+	if err := json.Unmarshal(data, &values); err != nil {
+		return err
+	}
+	*m = values
+	return nil
+}
+
+// SetNotificationPreferencesResponse represents changed notification preferences.
+type SetNotificationPreferencesResponse struct {
+	BaseResponse
+	SubmittedEmailPreferences NotificationPreferenceStateMap       `json:"submitted_email_preferences"`
+	UpdatedEmailPreferences   NotificationPreferenceStateMap       `json:"updated_email_preferences"`
+	FriendlyDescriptions      NotificationPreferenceDescriptionMap `json:"friendly_descriptions"`
+}
+
 // SshKeysResponse represents the response from getSshKeys API call
 type SshKeysResponse struct {
 	BaseResponse

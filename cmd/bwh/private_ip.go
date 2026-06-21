@@ -207,14 +207,6 @@ var privateIPDeleteCmd = &cli.Command{
 	},
 }
 
-// yesNo converts a boolean to user-friendly Yes/No string
-func yesNo(b bool) string {
-	if b {
-		return "✅ Yes"
-	}
-	return "❌ No"
-}
-
 // aggregateIPv4Ranges groups contiguous IPv4 addresses into concise ranges.
 // If start and end share the same first three octets, prints as A.B.C.start-endD (e.g., 10.59.12.26-254).
 // Otherwise prints as startIP-endIP. Singletons are printed as the single IP.
