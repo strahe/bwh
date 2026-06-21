@@ -319,13 +319,9 @@ func (m *NotificationPreferenceStateMap) UnmarshalJSON(data []byte) error {
 		*m = nil
 		return nil
 	}
-	var emptyArray []json.RawMessage
-	if err := json.Unmarshal(data, &emptyArray); err == nil {
-		if len(emptyArray) == 0 {
-			*m = NotificationPreferenceStateMap{}
-			return nil
-		}
-		return json.Unmarshal(data, &map[string]FlexibleInt{})
+	if trimmed == "[]" {
+		*m = NotificationPreferenceStateMap{}
+		return nil
 	}
 
 	values := map[string]FlexibleInt{}
@@ -351,13 +347,9 @@ func (m *NotificationPreferenceDescriptionMap) UnmarshalJSON(data []byte) error 
 		*m = nil
 		return nil
 	}
-	var emptyArray []json.RawMessage
-	if err := json.Unmarshal(data, &emptyArray); err == nil {
-		if len(emptyArray) == 0 {
-			*m = NotificationPreferenceDescriptionMap{}
-			return nil
-		}
-		return json.Unmarshal(data, &map[string]string{})
+	if trimmed == "[]" {
+		*m = NotificationPreferenceDescriptionMap{}
+		return nil
 	}
 
 	values := map[string]string{}

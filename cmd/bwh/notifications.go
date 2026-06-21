@@ -13,7 +13,7 @@ import (
 
 var notificationsCmd = &cli.Command{
 	Name:  "notifications",
-	Usage: "inspect KiwiVM notification preferences",
+	Usage: "display and update KiwiVM notification preferences",
 	Commands: []*cli.Command{
 		notificationsListCmd,
 		notificationsSetCmd,

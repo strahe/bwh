@@ -13,7 +13,7 @@ import (
 
 var abuseCmd = &cli.Command{
 	Name:  "abuse",
-	Usage: "inspect abuse suspensions and policy violations",
+	Usage: "display and resolve abuse suspensions and policy violations",
 	Commands: []*cli.Command{
 		abuseSuspensionsCmd,
 		abusePolicyCmd,

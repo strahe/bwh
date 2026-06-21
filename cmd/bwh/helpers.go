@@ -64,6 +64,14 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
+// yesNo converts a boolean to a user-friendly Yes/No string.
+func yesNo(b bool) string {
+	if b {
+		return "✅ Yes"
+	}
+	return "❌ No"
+}
+
 // validateBackupToken validates the format of a backup token
 func validateBackupToken(token string) error {
 	// Backup tokens are 40-character hexadecimal strings
