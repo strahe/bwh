@@ -106,13 +106,7 @@ var privateIPAssignCmd = &cli.Command{
 	Name:      "assign",
 	Usage:     "assign a private IPv4 address (random if not specified)",
 	ArgsUsage: "[ip]",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		var ip string
 		if cmd.Args().Len() > 0 {
@@ -125,6 +119,36 @@ var privateIPAssignCmd = &cli.Command{
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
+		}
+
+		serviceInfo, err := bwhClient.GetServiceInfo(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get service info: %w", err)
+		}
+		if !serviceInfo.PlanPrivateNetworkAvailable || !serviceInfo.LocationPrivateNetworkAvailable {
+			return fmt.Errorf("private IPv4 is not available for this plan or location")
+		}
+		if ip != "" && containsString(serviceInfo.PrivateIPAddresses, ip) {
+			fmt.Printf("✅ Private IPv4 address %s is already assigned (no change needed)\n", ip)
+			return nil
+		}
+		availableResp, err := bwhClient.GetAvailablePrivateIPs(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get available private IPs: %w", err)
+		}
+		if len(availableResp.AvailableIPs) == 0 {
+			return fmt.Errorf("no private IPv4 addresses are available")
+		}
+		if ip != "" && !containsString(availableResp.AvailableIPs, ip) {
+			return fmt.Errorf("private IPv4 address %s is not available for assignment", ip)
+		}
+		if cmd.Bool("dry-run") {
+			detail := fmt.Sprintf("available private IPs: %d", len(availableResp.AvailableIPs))
+			if ip != "" {
+				detail = fmt.Sprintf("ip: %s", ip)
+			}
+			printDryRun("privateIp/assign", resolvedName, detail)
+			return nil
 		}
 
 		if !cmd.Bool("yes") {
@@ -163,13 +187,7 @@ var privateIPDeleteCmd = &cli.Command{
 	Name:      "delete",
 	Usage:     "delete a private IPv4 address",
 	ArgsUsage: "<ip>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("private IPv4 address is required")
@@ -177,6 +195,23 @@ var privateIPDeleteCmd = &cli.Command{
 		ip := cmd.Args().First()
 		if parsed := net.ParseIP(ip); parsed == nil || parsed.To4() == nil {
 			return fmt.Errorf("invalid IPv4 address: %s", ip)
+		}
+
+		bwhClient, resolvedName, err := createBWHClient(cmd)
+		if err != nil {
+			return err
+		}
+
+		serviceInfo, err := bwhClient.GetServiceInfo(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get service info: %w", err)
+		}
+		if !containsString(serviceInfo.PrivateIPAddresses, ip) {
+			return fmt.Errorf("private IPv4 address %s is not assigned to instance %s", ip, resolvedName)
+		}
+		if cmd.Bool("dry-run") {
+			printDryRun("privateIp/delete", resolvedName, fmt.Sprintf("ip: %s", ip))
+			return nil
 		}
 
 		if !cmd.Bool("yes") {
@@ -189,11 +224,6 @@ var privateIPDeleteCmd = &cli.Command{
 				fmt.Printf("Operation cancelled\n")
 				return nil
 			}
-		}
-
-		bwhClient, resolvedName, err := createBWHClient(cmd)
-		if err != nil {
-			return err
 		}
 
 		fmt.Printf("Deleting private IPv4 address '%s' from instance: %s\n", ip, resolvedName)

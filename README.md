@@ -261,15 +261,18 @@ completion      Generate shell completion script
 
 Use `bwh <command> --help` to view detailed options and usage examples for each command.
 
-### Abuse and Notification Writes
+### Write API Safety
 
 ```bash
+bwh reinstall --os debian-12-x86_64 --dry-run
+bwh reset-password --dry-run
+bwh ssh set "ssh-ed25519 AAAA..." --dry-run
+bwh migrate start us-west --dry-run
 bwh abuse unsuspend <record_id> --dry-run
-bwh abuse resolve-policy <record_id> --dry-run
 bwh notifications set <preference_id> <on|off> --dry-run
 ```
 
-Use `--dry-run` to validate and preview without calling write APIs. Add `--yes` only when you want to skip the y/N prompt.
+Most commands that call KiwiVM write APIs support `--dry-run` to validate and preview without calling the write API. Add `--yes` only when you want to skip the y/N prompt. Existing `--force` flags on dangerous commands such as `kill` and `reinstall` remain supported for compatibility.
 
 ## Build
 

@@ -261,15 +261,18 @@ completion      生成 shell 自动补全脚本
 
 使用 `bwh <command> --help` 查看每个命令的详细选项和用法示例。
 
-### Abuse 与通知写命令
+### 写 API 安全
 
 ```bash
+bwh reinstall --os debian-12-x86_64 --dry-run
+bwh reset-password --dry-run
+bwh ssh set "ssh-ed25519 AAAA..." --dry-run
+bwh migrate start us-west --dry-run
 bwh abuse unsuspend <record_id> --dry-run
-bwh abuse resolve-policy <record_id> --dry-run
 bwh notifications set <preference_id> <on|off> --dry-run
 ```
 
-使用 `--dry-run` 做校验和预览，不调用写 API。确认需要跳过 y/N 提示时再加 `--yes`。
+大多数会调用 KiwiVM 写 API 的命令都支持 `--dry-run`，用于校验和预览，但不调用写 API。确认需要跳过 y/N 提示时再加 `--yes`。`kill`、`reinstall` 等危险命令原有的 `--force` 仍保留以兼容旧脚本。
 
 ## 构建
 

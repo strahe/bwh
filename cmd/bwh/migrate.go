@@ -77,6 +77,7 @@ var migrateStartCmd = &cli.Command{
 			Aliases: []string{"y"},
 			Usage:   "skip confirmation prompt",
 		},
+		dryRunFlag(),
 		&cli.StringFlag{
 			Name:  "timeout",
 			Usage: "request timeout (e.g. 10m, 30m). Default: 15m",
@@ -102,21 +103,41 @@ var migrateStartCmd = &cli.Command{
 			return err
 		}
 
-		// Warn user and confirm unless --yes
-		if !cmd.Bool("yes") {
-			fmt.Printf("⚠️  Starting migration will REPLACE all IPv4 addresses of VPS '%s'.\n", resolvedName)
-			fmt.Printf("⚠️  Downtime is expected during migration.\n")
-			if !confirmAction("restart", resolvedName) { // reuse yes/no prompt semantics
-				fmt.Println("Operation cancelled.")
-				return nil
-			}
-		}
-
-		// Parse timeout
 		timeoutStr := cmd.String("timeout")
 		d, err := time.ParseDuration(timeoutStr)
 		if err != nil || d <= 0 {
 			return fmt.Errorf("invalid timeout: %s", timeoutStr)
+		}
+
+		locations, err := bwhClient.GetMigrateLocations(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get migration locations: %w", err)
+		}
+		if locations.CurrentLocation == locationID {
+			fmt.Printf("✅ Instance is already in migration location '%s' (no change needed)\n", locationID)
+			return nil
+		}
+		if !containsString(locations.Locations, locationID) {
+			return fmt.Errorf("migration location %q is not available for instance %s", locationID, resolvedName)
+		}
+
+		if cmd.Bool("dry-run") {
+			desc := locations.Descriptions[locationID]
+			printDryRun("migrate/start", resolvedName, fmt.Sprintf("location: %s -> %s", locations.CurrentLocation, locationID), fmt.Sprintf("description: %s", desc), fmt.Sprintf("timeout: %s", d))
+			return nil
+		}
+
+		if !cmd.Bool("yes") {
+			fmt.Printf("⚠️  Starting migration will REPLACE all IPv4 addresses of VPS '%s'.\n", resolvedName)
+			fmt.Printf("⚠️  Downtime is expected during migration.\n")
+			confirmed, err := promptConfirmation("Continue with migration?")
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				printOperationCancelled()
+				return nil
+			}
 		}
 
 		fmt.Printf("Starting migration to '%s' for instance: %s (timeout: %s)\n", locationID, resolvedName, d)

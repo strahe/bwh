@@ -127,8 +127,6 @@ type abuseAPI interface {
 	ResolvePolicyViolation(context.Context, int) error
 }
 
-type confirmationFunc func(string) (bool, error)
-
 func displaySuspensionDetails(resp *client.SuspensionDetailsResponse) {
 	fmt.Printf("\n🚫 SUSPENSION DETAILS\n")
 	fmt.Printf("   Suspensions (YTD): %d\n", resp.SuspensionCount)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/strahe/bwh/pkg/client"
 	"github.com/urfave/cli/v3"
 )
 
@@ -73,12 +74,12 @@ var sshCmd = &cli.Command{
 			Name:      "set",
 			Usage:     "set VM-level SSH keys (replaces all existing keys)",
 			ArgsUsage: "<key1> [key2] [key3]...",
-			Flags: []cli.Flag{
+			Flags: writeFlags(
 				&cli.StringFlag{
 					Name:  "file",
 					Usage: "read SSH keys from file (one per line)",
 				},
-			},
+			),
 			Action: func(ctx context.Context, cmd *cli.Command) error {
 				bwhClient, resolvedName, err := createBWHClient(cmd)
 				if err != nil {
@@ -103,47 +104,90 @@ var sshCmd = &cli.Command{
 					return fmt.Errorf("no SSH keys provided")
 				}
 
-				// Validate SSH keys format
-				for i, key := range sshKeys {
-					if !isValidSshKey(key) {
-						return fmt.Errorf("invalid SSH key format at position %d", i+1)
-					}
-				}
-
-				fmt.Printf("Setting %d SSH key(s) for %s...\n", len(sshKeys), resolvedName)
-
-				if err := bwhClient.UpdateSshKeys(ctx, sshKeys); err != nil {
-					return fmt.Errorf("failed to update SSH keys: %w", err)
-				}
-
-				fmt.Printf("✅ SSH keys updated successfully\n")
-				fmt.Printf("Note: Keys will be applied during the next reinstallOS operation.\n")
-
-				return nil
+				return runUpdateSshKeys(ctx, bwhClient, resolvedName, sshKeys, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 			},
 		},
 		{
 			Name:  "clear",
 			Usage: "clear all VM-level SSH keys",
+			Flags: writeFlags(),
 			Action: func(ctx context.Context, cmd *cli.Command) error {
 				bwhClient, resolvedName, err := createBWHClient(cmd)
 				if err != nil {
 					return err
 				}
 
-				fmt.Printf("Clearing all VM-level SSH keys for %s...\n", resolvedName)
-
-				if err := bwhClient.UpdateSshKeys(ctx, []string{}); err != nil {
-					return fmt.Errorf("failed to clear SSH keys: %w", err)
-				}
-
-				fmt.Printf("✅ VM-level SSH keys cleared successfully\n")
-				fmt.Printf("Note: Account-level keys (if any) will still be used during reinstallOS.\n")
-
-				return nil
+				return runUpdateSshKeys(ctx, bwhClient, resolvedName, []string{}, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 			},
 		},
 	},
+}
+
+type sshKeysAPI interface {
+	GetSshKeys(context.Context) (*client.SshKeysResponse, error)
+	UpdateSshKeys(context.Context, []string) error
+}
+
+func runUpdateSshKeys(ctx context.Context, api sshKeysAPI, resolvedName string, sshKeys []string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	for i, key := range sshKeys {
+		if !isValidSshKey(key) {
+			return fmt.Errorf("invalid SSH key format at position %d", i+1)
+		}
+	}
+
+	current, err := api.GetSshKeys(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get SSH keys: %w", err)
+	}
+	currentKeys := current.GetSshKeysVeidSlice()
+	if sameStringSlices(currentKeys, sshKeys) {
+		fmt.Printf("✅ VM-level SSH keys are already in the requested state (no change needed)\n")
+		return nil
+	}
+
+	fmt.Printf("VM-level SSH keys for %s: %d current -> %d requested\n", resolvedName, len(currentKeys), len(sshKeys))
+	for i, key := range sshKeys {
+		fmt.Printf("   Requested key %d: %s\n", i+1, maskSSHKey(key))
+	}
+
+	if dryRun {
+		operation := "replace"
+		if len(sshKeys) == 0 {
+			operation = "clear"
+		}
+		printDryRun("updateSshKeys", resolvedName, fmt.Sprintf("operation: %s", operation), fmt.Sprintf("keys: %d -> %d", len(currentKeys), len(sshKeys)))
+		return nil
+	}
+
+	prompt := fmt.Sprintf("Replace VM-level SSH keys for '%s'?", resolvedName)
+	if len(sshKeys) == 0 {
+		prompt = fmt.Sprintf("Clear all VM-level SSH keys for '%s'?", resolvedName)
+	}
+	confirmed, err := confirmWrite(prompt, skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	if len(sshKeys) == 0 {
+		fmt.Printf("Clearing all VM-level SSH keys for %s...\n", resolvedName)
+	} else {
+		fmt.Printf("Setting %d SSH key(s) for %s...\n", len(sshKeys), resolvedName)
+	}
+	if err := api.UpdateSshKeys(ctx, sshKeys); err != nil {
+		return fmt.Errorf("failed to update SSH keys: %w", err)
+	}
+
+	if len(sshKeys) == 0 {
+		fmt.Printf("✅ VM-level SSH keys cleared successfully\n")
+		fmt.Printf("Note: Account-level keys (if any) will still be used during reinstallOS.\n")
+	} else {
+		fmt.Printf("✅ SSH keys updated successfully\n")
+		fmt.Printf("Note: Keys will be applied during the next reinstallOS operation.\n")
+	}
+	return nil
 }
 
 func printKeys(keys []string) {

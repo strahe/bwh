@@ -104,13 +104,7 @@ var backupCopyToSnapshotCmd = &cli.Command{
 	Aliases:   []string{"cts"},
 	Usage:     "copy a backup to a restorable snapshot",
 	ArgsUsage: "<backup_token>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("backup token is required")
@@ -145,6 +139,11 @@ var backupCopyToSnapshotCmd = &cli.Command{
 		fmt.Printf("   Size         : %s\n", formatBytes(backup.Size))
 		fmt.Printf("   MD5 Hash     : %s\n", backup.MD5)
 		fmt.Printf("   Created      : %s\n", time.Unix(backup.Timestamp, 0).Format("2006-01-02 15:04:05"))
+
+		if cmd.Bool("dry-run") {
+			printDryRun("backup/copyToSnapshot", resolvedName, fmt.Sprintf("backupToken: %s", maskSensitive(backupToken)))
+			return nil
+		}
 
 		if !cmd.Bool("yes") {
 			fmt.Printf("\n⚠️  Are you sure you want to copy this backup to a snapshot?\n")
