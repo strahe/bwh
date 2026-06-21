@@ -100,6 +100,8 @@ backups, err := c.ListBackups(ctx)
 
 ### 可用方法
 
+SDK 只读 API 调用使用 `GET` query 参数；会改变状态的写 API 调用使用 `POST application/x-www-form-urlencoded` 表单数据，因此写接口参数和凭据不会放在 URL 中。
+
 **服务器管理**: `GetServiceInfo`、`GetLiveServiceInfo`、`Start`、`Stop`、`Restart`、`Kill`、`SetHostname`、`ReinstallOS`、`ResetRootPassword`、`MountISO`、`UnmountISO`
 
 **监控**: `GetRawUsageStats`、`GetAuditLog`、`GetRateLimitStatus`

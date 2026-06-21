@@ -5,8 +5,276 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
+
+func TestClient_WriteMethodsUsePostForm(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+		call     func(context.Context, *Client) error
+		wantForm map[string]string
+	}{
+		{
+			name:     "create snapshot",
+			endpoint: "snapshot/create",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.CreateSnapshot(ctx, "backup-name")
+				return err
+			},
+			wantForm: map[string]string{"description": "backup-name"},
+		},
+		{
+			name:     "delete snapshot",
+			endpoint: "snapshot/delete",
+			call: func(ctx context.Context, c *Client) error {
+				return c.DeleteSnapshot(ctx, "snapshot.tar.gz")
+			},
+			wantForm: map[string]string{"snapshot": "snapshot.tar.gz"},
+		},
+		{
+			name:     "restore snapshot",
+			endpoint: "snapshot/restore",
+			call: func(ctx context.Context, c *Client) error {
+				return c.RestoreSnapshot(ctx, "snapshot.tar.gz")
+			},
+			wantForm: map[string]string{"snapshot": "snapshot.tar.gz"},
+		},
+		{
+			name:     "toggle snapshot sticky",
+			endpoint: "snapshot/toggleSticky",
+			call: func(ctx context.Context, c *Client) error {
+				return c.ToggleSnapshotSticky(ctx, "snapshot.tar.gz", true)
+			},
+			wantForm: map[string]string{"snapshot": "snapshot.tar.gz", "sticky": "1"},
+		},
+		{
+			name:     "export snapshot",
+			endpoint: "snapshot/export",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ExportSnapshot(ctx, "snapshot.tar.gz")
+				return err
+			},
+			wantForm: map[string]string{"snapshot": "snapshot.tar.gz"},
+		},
+		{
+			name:     "import snapshot",
+			endpoint: "snapshot/import",
+			call: func(ctx context.Context, c *Client) error {
+				return c.ImportSnapshot(ctx, "654321", "token")
+			},
+			wantForm: map[string]string{"sourceVeid": "654321", "sourceToken": "token"},
+		},
+		{
+			name:     "restart",
+			endpoint: "restart",
+			call: func(ctx context.Context, c *Client) error {
+				return c.Restart(ctx)
+			},
+		},
+		{
+			name:     "start",
+			endpoint: "start",
+			call: func(ctx context.Context, c *Client) error {
+				return c.Start(ctx)
+			},
+		},
+		{
+			name:     "stop",
+			endpoint: "stop",
+			call: func(ctx context.Context, c *Client) error {
+				return c.Stop(ctx)
+			},
+		},
+		{
+			name:     "kill",
+			endpoint: "kill",
+			call: func(ctx context.Context, c *Client) error {
+				return c.Kill(ctx)
+			},
+		},
+		{
+			name:     "reinstall os",
+			endpoint: "reinstallOS",
+			call: func(ctx context.Context, c *Client) error {
+				return c.ReinstallOS(ctx, "debian-12-x86_64")
+			},
+			wantForm: map[string]string{"os": "debian-12-x86_64"},
+		},
+		{
+			name:     "reset root password",
+			endpoint: "resetRootPassword",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ResetRootPassword(ctx)
+				return err
+			},
+		},
+		{
+			name:     "copy backup to snapshot",
+			endpoint: "backup/copyToSnapshot",
+			call: func(ctx context.Context, c *Client) error {
+				return c.CopyBackupToSnapshot(ctx, "backup-token")
+			},
+			wantForm: map[string]string{"backupToken": "backup-token"},
+		},
+		{
+			name:     "set hostname",
+			endpoint: "setHostname",
+			call: func(ctx context.Context, c *Client) error {
+				return c.SetHostname(ctx, "host.example.com")
+			},
+			wantForm: map[string]string{"newHostname": "host.example.com"},
+		},
+		{
+			name:     "unsuspend",
+			endpoint: "unsuspend",
+			call: func(ctx context.Context, c *Client) error {
+				return c.Unsuspend(ctx, 123)
+			},
+			wantForm: map[string]string{"record_id": "123"},
+		},
+		{
+			name:     "resolve policy violation",
+			endpoint: "resolvePolicyViolation",
+			call: func(ctx context.Context, c *Client) error {
+				return c.ResolvePolicyViolation(ctx, 789)
+			},
+			wantForm: map[string]string{"record_id": "789"},
+		},
+		{
+			name:     "set notification preferences",
+			endpoint: "kiwivm/setNotificationPreferences",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.SetNotificationPreferences(ctx, map[string]bool{"security-successful-login": true})
+				return err
+			},
+			wantForm: map[string]string{"json_notification_preferences": `{"security-successful-login":1}`},
+		},
+		{
+			name:     "update ssh keys",
+			endpoint: "updateSshKeys",
+			call: func(ctx context.Context, c *Client) error {
+				return c.UpdateSshKeys(ctx, []string{"ssh-rsa key1", "ssh-ed25519 key2"})
+			},
+			wantForm: map[string]string{"ssh_keys": "ssh-rsa key1\nssh-ed25519 key2\n"},
+		},
+		{
+			name:     "set ptr",
+			endpoint: "setPTR",
+			call: func(ctx context.Context, c *Client) error {
+				return c.SetPTR(ctx, "192.0.2.10", "host.example.com")
+			},
+			wantForm: map[string]string{"ip": "192.0.2.10", "ptr": "host.example.com"},
+		},
+		{
+			name:     "mount iso",
+			endpoint: "iso/mount",
+			call: func(ctx context.Context, c *Client) error {
+				return c.MountISO(ctx, "ubuntu.iso")
+			},
+			wantForm: map[string]string{"iso": "ubuntu.iso"},
+		},
+		{
+			name:     "unmount iso",
+			endpoint: "iso/unmount",
+			call: func(ctx context.Context, c *Client) error {
+				return c.UnmountISO(ctx)
+			},
+		},
+		{
+			name:     "start migration with timeout",
+			endpoint: "migrate/start",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.StartMigrationWithTimeout(ctx, "us-west", time.Second)
+				return err
+			},
+			wantForm: map[string]string{"location": "us-west"},
+		},
+		{
+			name:     "add ipv6",
+			endpoint: "ipv6/add",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.AddIPv6(ctx)
+				return err
+			},
+		},
+		{
+			name:     "delete ipv6",
+			endpoint: "ipv6/delete",
+			call: func(ctx context.Context, c *Client) error {
+				return c.DeleteIPv6(ctx, "2001:db8::/64")
+			},
+			wantForm: map[string]string{"ip": "2001:db8::/64"},
+		},
+		{
+			name:     "assign private ip",
+			endpoint: "privateIp/assign",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.AssignPrivateIP(ctx, "10.0.0.2")
+				return err
+			},
+			wantForm: map[string]string{"ip": "10.0.0.2"},
+		},
+		{
+			name:     "delete private ip",
+			endpoint: "privateIp/delete",
+			call: func(ctx context.Context, c *Client) error {
+				return c.DeletePrivateIP(ctx, "10.0.0.2")
+			},
+			wantForm: map[string]string{"ip": "10.0.0.2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assertPostForm(t, r, tt.endpoint, "valid_key", tt.wantForm)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"error":0}`))
+			}))
+			defer server.Close()
+
+			c := NewClient("valid_key", "123456")
+			c.SetBaseURL(server.URL)
+
+			if err := tt.call(context.Background(), c); err != nil {
+				t.Fatalf("%s error = %v", tt.name, err)
+			}
+		})
+	}
+}
+
+func TestClient_ReadMethodsUseGetQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if got := r.URL.Query().Get("veid"); got != "123456" {
+			t.Fatalf("query veid = %q, want 123456", got)
+		}
+		if got := r.URL.Query().Get("api_key"); got != "valid_key" {
+			t.Fatalf("query api_key = %q, want valid_key", got)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("ParseForm() error = %v", err)
+		}
+		if got := r.PostForm.Get("veid"); got != "" {
+			t.Fatalf("post form veid = %q, want empty", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":0}`))
+	}))
+	defer server.Close()
+
+	c := NewClient("valid_key", "123456")
+	c.SetBaseURL(server.URL)
+
+	if _, err := c.GetRateLimitStatus(context.Background()); err != nil {
+		t.Fatalf("GetRateLimitStatus() error = %v", err)
+	}
+}
 
 func TestClient_WriteAbuseMethods_Mock(t *testing.T) {
 	tests := []struct {
@@ -36,13 +304,7 @@ func TestClient_WriteAbuseMethods_Mock(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				path := r.URL.Path[1:]
-				if path != tt.endpoint {
-					t.Fatalf("endpoint = %s, want %s", path, tt.endpoint)
-				}
-				if got := r.URL.Query().Get("record_id"); got != tt.wantRecord {
-					t.Fatalf("record_id = %q, want %q", got, tt.wantRecord)
-				}
+				assertPostForm(t, r, tt.endpoint, "valid_key", map[string]string{"record_id": tt.wantRecord})
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"error":0}`))
 			}))
@@ -83,13 +345,10 @@ func TestClient_WriteMethods_InvalidInput(t *testing.T) {
 
 func TestClient_SetNotificationPreferences_Mock(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path[1:]
-		if path != "kiwivm/setNotificationPreferences" {
-			t.Fatalf("endpoint = %s, want kiwivm/setNotificationPreferences", path)
-		}
+		assertPostForm(t, r, "kiwivm/setNotificationPreferences", "valid_key", nil)
 
 		var sent map[string]int
-		if err := json.Unmarshal([]byte(r.URL.Query().Get("json_notification_preferences")), &sent); err != nil {
+		if err := json.Unmarshal([]byte(r.PostForm.Get("json_notification_preferences")), &sent); err != nil {
 			t.Fatalf("json_notification_preferences decode error = %v", err)
 		}
 		if sent["bandwidth-usage-alert-80"] != 1 {
@@ -194,10 +453,7 @@ func TestClient_NewWriteMethods_BWHError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				path := r.URL.Path[1:]
-				if path != tt.endpoint {
-					t.Fatalf("endpoint = %s, want %s", path, tt.endpoint)
-				}
+				assertPostForm(t, r, tt.endpoint, "invalid_key", nil)
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"error":700005,"message":"Authentication failure"}`))
 			}))
@@ -214,5 +470,36 @@ func TestClient_NewWriteMethods_BWHError(t *testing.T) {
 				t.Fatalf("expected BWHError, got %T: %v", err, err)
 			}
 		})
+	}
+}
+
+func assertPostForm(t *testing.T, r *http.Request, endpoint, apiKey string, want map[string]string) {
+	t.Helper()
+
+	if r.Method != http.MethodPost {
+		t.Fatalf("method = %s, want POST", r.Method)
+	}
+	if path := r.URL.Path[1:]; path != endpoint {
+		t.Fatalf("endpoint = %s, want %s", path, endpoint)
+	}
+	if r.URL.RawQuery != "" {
+		t.Fatalf("raw query = %q, want empty", r.URL.RawQuery)
+	}
+	if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
+		t.Fatalf("Content-Type = %q, want application/x-www-form-urlencoded", contentType)
+	}
+	if err := r.ParseForm(); err != nil {
+		t.Fatalf("ParseForm() error = %v", err)
+	}
+	if got := r.PostForm.Get("veid"); got != "123456" {
+		t.Fatalf("post form veid = %q, want 123456", got)
+	}
+	if got := r.PostForm.Get("api_key"); got != apiKey {
+		t.Fatalf("post form api_key = %q, want %s", got, apiKey)
+	}
+	for key, wantValue := range want {
+		if got := r.PostForm.Get(key); got != wantValue {
+			t.Fatalf("post form %s = %q, want %q", key, got, wantValue)
+		}
 	}
 }
