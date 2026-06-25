@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
@@ -12,13 +12,12 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func generateRandomFileName() string {
-	chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+func generateRandomFileName() (string, error) {
 	result := make([]byte, 8)
-	for i := range result {
-		result[i] = chars[rand.Intn(len(chars))]
+	if _, err := rand.Read(result); err != nil {
+		return "", fmt.Errorf("failed to generate output filename: %w", err)
 	}
-	return fmt.Sprintf("password_%s.txt", string(result))
+	return fmt.Sprintf("password_%x.txt", result), nil
 }
 
 var resetPasswordCmd = &cli.Command{
@@ -50,7 +49,11 @@ type resetPasswordAPI interface {
 func runResetPassword(ctx context.Context, api resetPasswordAPI, resolvedName, outputFile string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
 	filePath := outputFile
 	if filePath == "" {
-		filePath = generateRandomFileName()
+		generatedPath, err := generateRandomFileName()
+		if err != nil {
+			return err
+		}
+		filePath = generatedPath
 	}
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
@@ -89,6 +92,17 @@ func runResetPassword(ctx context.Context, api resetPasswordAPI, resolvedName, o
 		return nil
 	}
 
+	output, err := openPasswordOutputFile(filePath, fileExists)
+	if err != nil {
+		return err
+	}
+	keepOutput := false
+	defer func() {
+		if !keepOutput {
+			output.abort()
+		}
+	}()
+
 	fmt.Printf("Resetting root password for instance: %s\n", resolvedName)
 
 	result, err := api.ResetRootPassword(ctx)
@@ -100,10 +114,10 @@ func runResetPassword(ctx context.Context, api resetPasswordAPI, resolvedName, o
 	passwordContent += fmt.Sprintf("Generated at: %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
 	passwordContent += fmt.Sprintf("Password: %s\n", result.Password)
 
-	err = os.WriteFile(filePath, []byte(passwordContent), 0o600)
-	if err != nil {
+	if err := output.write(passwordContent); err != nil {
 		return fmt.Errorf("failed to write password to file: %w", err)
 	}
+	keepOutput = true
 
 	fmt.Printf("\n✅ Root password reset successfully!\n")
 	fmt.Printf("🔑 Password saved to: %s\n", absPath)
@@ -139,4 +153,61 @@ func preflightPasswordOutput(filePath string) (bool, error) {
 		return false, fmt.Errorf("output parent path is not a directory: %s", parent)
 	}
 	return false, nil
+}
+
+type passwordOutputFile struct {
+	file    *os.File
+	path    string
+	created bool
+	closed  bool
+}
+
+func openPasswordOutputFile(filePath string, fileExists bool) (*passwordOutputFile, error) {
+	flags := os.O_WRONLY
+	created := false
+	if !fileExists {
+		flags |= os.O_CREATE | os.O_EXCL
+		created = true
+	}
+
+	file, err := os.OpenFile(filePath, flags, 0o600)
+	if err != nil {
+		if fileExists {
+			return nil, fmt.Errorf("failed to open output file before resetting password: %w", err)
+		}
+		return nil, fmt.Errorf("failed to create output file before resetting password: %w", err)
+	}
+
+	return &passwordOutputFile{file: file, path: filePath, created: created}, nil
+}
+
+func (o *passwordOutputFile) write(content string) error {
+	if err := o.file.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := o.file.Seek(0, 0); err != nil {
+		return err
+	}
+	if _, err := o.file.WriteString(content); err != nil {
+		return err
+	}
+	if err := o.file.Close(); err != nil {
+		o.closed = true
+		return err
+	}
+	o.closed = true
+	return nil
+}
+
+func (o *passwordOutputFile) abort() {
+	if o == nil {
+		return
+	}
+	if !o.closed {
+		_ = o.file.Close()
+		o.closed = true
+	}
+	if o.created {
+		_ = os.Remove(o.path)
+	}
 }

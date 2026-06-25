@@ -134,7 +134,7 @@ var backupCopyToSnapshotCmd = &cli.Command{
 
 		// Show backup info for confirmation
 		fmt.Printf("Target backup for instance '%s':\n", resolvedName)
-		fmt.Printf("   Token        : %s\n", backupToken)
+		fmt.Printf("   Token        : %s\n", maskSensitive(backupToken))
 		fmt.Printf("   OS           : %s\n", backup.OS)
 		fmt.Printf("   Size         : %s\n", formatBytes(backup.Size))
 		fmt.Printf("   MD5 Hash     : %s\n", backup.MD5)

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -165,11 +167,21 @@ func TestRunUpdateSshKeysDryRunMasksKeys(t *testing.T) {
 }
 
 type fakeResetPasswordAPI struct {
-	calls int
+	calls      int
+	beforeCall func() error
+	err        error
 }
 
 func (f *fakeResetPasswordAPI) ResetRootPassword(context.Context) (*client.ResetRootPasswordResponse, error) {
 	f.calls++
+	if f.beforeCall != nil {
+		if err := f.beforeCall(); err != nil {
+			return nil, err
+		}
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
 	return &client.ResetRootPasswordResponse{Password: "secret"}, nil
 }
 
@@ -198,6 +210,63 @@ func TestRunResetPasswordDryRunDoesNotPromptOrWrite(t *testing.T) {
 	}
 	if !strings.Contains(out, "would overwrite existing file") {
 		t.Fatalf("output missing overwrite preview:\n%s", out)
+	}
+}
+
+func TestRunResetPasswordPreparesOutputBeforeAPI(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/password.txt"
+	api := &fakeResetPasswordAPI{
+		beforeCall: func() error {
+			info, err := os.Stat(path)
+			if err != nil {
+				return err
+			}
+			if got := info.Mode().Perm(); got != 0o600 {
+				return fmt.Errorf("mode = %o, want 600", got)
+			}
+			return nil
+		},
+	}
+
+	if err := runResetPassword(context.Background(), api, "test", path, false, true, confirmNo); err != nil {
+		t.Fatalf("runResetPassword() error = %v", err)
+	}
+	if api.calls != 1 {
+		t.Fatalf("calls = %d, want 1", api.calls)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	if !strings.Contains(string(content), "Password: secret") {
+		t.Fatalf("output file missing password:\n%s", content)
+	}
+}
+
+func TestRunResetPasswordRemovesNewOutputOnAPIError(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/password.txt"
+	api := &fakeResetPasswordAPI{err: errors.New("boom")}
+
+	err := runResetPassword(context.Background(), api, "test", path, false, true, confirmNo)
+	if err == nil {
+		t.Fatal("runResetPassword() error = nil, want error")
+	}
+	if api.calls != 1 {
+		t.Fatalf("calls = %d, want 1", api.calls)
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("output file should be removed after API error, stat error = %v", statErr)
+	}
+}
+
+func TestSameStringSlicesIgnoresOrderAndPreservesCount(t *testing.T) {
+	if !sameStringSlices([]string{" key-b ", "key-a"}, []string{"key-a", "key-b"}) {
+		t.Fatal("sameStringSlices() should ignore order and surrounding whitespace")
+	}
+	if sameStringSlices([]string{"key-a", "key-a"}, []string{"key-a"}) {
+		t.Fatal("sameStringSlices() should preserve duplicate counts")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -123,12 +124,15 @@ func sameStringSlices(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
+	normalizedA := make([]string, len(a))
+	normalizedB := make([]string, len(b))
 	for i := range a {
-		if strings.TrimSpace(a[i]) != strings.TrimSpace(b[i]) {
-			return false
-		}
+		normalizedA[i] = strings.TrimSpace(a[i])
+		normalizedB[i] = strings.TrimSpace(b[i])
 	}
-	return true
+	slices.Sort(normalizedA)
+	slices.Sort(normalizedB)
+	return slices.Equal(normalizedA, normalizedB)
 }
 
 func containsString(values []string, target string) bool {
