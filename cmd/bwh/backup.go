@@ -111,62 +111,67 @@ var backupCopyToSnapshotCmd = &cli.Command{
 		}
 		backupToken := cmd.Args().First()
 
-		// Validate backup token format before making API calls
-		if err := validateBackupToken(backupToken); err != nil {
-			return err
-		}
-
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
 		}
 
-		// First, verify the backup exists by listing backups
-		backupsResp, err := bwhClient.ListBackups(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to list backups: %w", err)
-		}
-
-		backup, exists := backupsResp.Backups[backupToken]
-		if !exists {
-			return fmt.Errorf("backup with token '%s' not found", backupToken)
-		}
-
-		// Show backup info for confirmation
-		fmt.Printf("Target backup for instance '%s':\n", resolvedName)
-		fmt.Printf("   Token        : %s\n", maskSensitive(backupToken))
-		fmt.Printf("   OS           : %s\n", backup.OS)
-		fmt.Printf("   Size         : %s\n", formatBytes(backup.Size))
-		fmt.Printf("   MD5 Hash     : %s\n", backup.MD5)
-		fmt.Printf("   Created      : %s\n", time.Unix(backup.Timestamp, 0).Format("2006-01-02 15:04:05"))
-
-		if cmd.Bool("dry-run") {
-			printDryRun("backup/copyToSnapshot", resolvedName, fmt.Sprintf("backupToken: %s", maskSensitive(backupToken)))
-			return nil
-		}
-
-		if !cmd.Bool("yes") {
-			fmt.Printf("\n⚠️  Are you sure you want to copy this backup to a snapshot?\n")
-			fmt.Printf("This will create a new restorable snapshot from the backup.\n")
-			confirmed, err := promptConfirmation("Continue?")
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				fmt.Printf("Operation cancelled\n")
-				return nil
-			}
-		}
-
-		fmt.Printf("\nCopying backup to snapshot for instance: %s\n", resolvedName)
-
-		if err := bwhClient.CopyBackupToSnapshot(ctx, backupToken); err != nil {
-			return fmt.Errorf("failed to copy backup to snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Backup successfully copied to snapshot\n")
-		fmt.Printf("💡 Use 'bwh snapshot list' to see the new snapshot\n")
-
-		return nil
+		return runBackupCopyToSnapshot(ctx, bwhClient, resolvedName, backupToken, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
+}
+
+type backupCopyAPI interface {
+	ListBackups(context.Context) (*client.BackupListResponse, error)
+	CopyBackupToSnapshot(context.Context, string) error
+}
+
+func runBackupCopyToSnapshot(ctx context.Context, api backupCopyAPI, resolvedName, backupToken string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	if err := validateBackupToken(backupToken); err != nil {
+		return err
+	}
+
+	backupsResp, err := api.ListBackups(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list backups: %w", err)
+	}
+
+	backup, exists := backupsResp.Backups[backupToken]
+	if !exists {
+		return fmt.Errorf("backup with token '%s' not found", maskSensitive(backupToken))
+	}
+
+	fmt.Printf("Target backup for instance '%s':\n", resolvedName)
+	fmt.Printf("   Token        : %s\n", maskSensitive(backupToken))
+	fmt.Printf("   OS           : %s\n", backup.OS)
+	fmt.Printf("   Size         : %s\n", formatBytes(backup.Size))
+	fmt.Printf("   MD5 Hash     : %s\n", backup.MD5)
+	fmt.Printf("   Created      : %s\n", time.Unix(backup.Timestamp, 0).Format("2006-01-02 15:04:05"))
+
+	if dryRun {
+		printDryRun("backup/copyToSnapshot", resolvedName, fmt.Sprintf("backupToken: %s", maskSensitive(backupToken)))
+		return nil
+	}
+
+	if !skipConfirm {
+		fmt.Printf("\n⚠️  Are you sure you want to copy this backup to a snapshot?\n")
+		fmt.Printf("This will create a new restorable snapshot from the backup.\n")
+	}
+	confirmed, err := confirmWrite("Continue?", skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("\nCopying backup to snapshot for instance: %s\n", resolvedName)
+
+	if err := api.CopyBackupToSnapshot(ctx, backupToken); err != nil {
+		return fmt.Errorf("failed to copy backup to snapshot: %w", err)
+	}
+
+	fmt.Printf("✅ Backup successfully copied to snapshot\n")
+	fmt.Printf("💡 Use 'bwh snapshot list' to see the new snapshot\n")
+
+	return nil
 }

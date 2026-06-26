@@ -166,6 +166,60 @@ func TestRunUpdateSshKeysDryRunMasksKeys(t *testing.T) {
 	}
 }
 
+type fakeBackupCopyAPI struct {
+	backups map[string]client.BackupInfo
+	copies  []string
+}
+
+func (f *fakeBackupCopyAPI) ListBackups(context.Context) (*client.BackupListResponse, error) {
+	return &client.BackupListResponse{Backups: f.backups}, nil
+}
+
+func (f *fakeBackupCopyAPI) CopyBackupToSnapshot(_ context.Context, backupToken string) error {
+	f.copies = append(f.copies, backupToken)
+	return nil
+}
+
+func TestRunBackupCopyToSnapshotMasksTokenInDryRun(t *testing.T) {
+	token := "0123456789abcdef0123456789abcdef01234567"
+	api := &fakeBackupCopyAPI{
+		backups: map[string]client.BackupInfo{
+			token: {OS: "debian-12", Size: 1024, MD5: "abc", Timestamp: 0},
+		},
+	}
+
+	out := captureStdout(t, func() {
+		if err := runBackupCopyToSnapshot(context.Background(), api, "test", token, true, false, confirmNo); err != nil {
+			t.Fatalf("runBackupCopyToSnapshot() error = %v", err)
+		}
+	})
+	if len(api.copies) != 0 {
+		t.Fatalf("copies = %v, want none", api.copies)
+	}
+	if strings.Contains(out, token) {
+		t.Fatalf("output leaked full backup token:\n%s", out)
+	}
+	if !strings.Contains(out, "0123...4567") {
+		t.Fatalf("output missing masked backup token:\n%s", out)
+	}
+}
+
+func TestRunBackupCopyToSnapshotMasksMissingTokenError(t *testing.T) {
+	token := "0123456789abcdef0123456789abcdef01234567"
+	api := &fakeBackupCopyAPI{backups: map[string]client.BackupInfo{}}
+
+	err := runBackupCopyToSnapshot(context.Background(), api, "test", token, true, false, confirmNo)
+	if err == nil {
+		t.Fatal("runBackupCopyToSnapshot() error = nil, want error")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("error leaked full backup token: %v", err)
+	}
+	if !strings.Contains(err.Error(), "0123...4567") {
+		t.Fatalf("error missing masked backup token: %v", err)
+	}
+}
+
 type fakeResetPasswordAPI struct {
 	calls      int
 	beforeCall func() error
