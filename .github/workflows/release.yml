@@ -1,12 +1,9 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Release version (e.g., v1.0.0)"
-        required: true
-        type: string
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -14,32 +11,72 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Validate release tag
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must match vX.Y.Z: $VERSION"
+            exit 1
+          fi
+
+          git fetch --force --tags origin +refs/heads/main:refs/remotes/origin/main
+
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "::error::Release already exists: $VERSION"
+            exit 1
+          fi
+
+          TAG_TYPE=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}" --jq '.object.type')
+          if [[ "$TAG_TYPE" != "tag" ]]; then
+            echo "::error::Release tag must be a signed annotated tag: $VERSION"
+            exit 1
+          fi
+
+          TAG_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}" --jq '.object.sha')
+          TAG_VERIFIED=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_SHA}" --jq '.verification.verified')
+          TAG_TARGET_TYPE=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_SHA}" --jq '.object.type')
+          TAG_TARGET_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_SHA}" --jq '.object.sha')
+
+          if [[ "$TAG_VERIFIED" != "true" ]]; then
+            echo "::error::Release tag is not GitHub Verified: $VERSION"
+            exit 1
+          fi
+
+          if [[ "$TAG_TARGET_TYPE" != "commit" ]]; then
+            echo "::error::Release tag must point to a commit: $VERSION"
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$TAG_TARGET_SHA" origin/main; then
+            echo "::error::Release tag target must be in origin/main history: $TAG_TARGET_SHA"
+            exit 1
+          fi
 
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24"
 
-      - name: Create tag
-        run: |
-          VERSION=${{ github.event.inputs.version }}
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a ${VERSION} -m "Release ${VERSION}"
-          git push origin ${VERSION}
-
       - name: Build binaries
-        run: make build-all
+        run: BWH_VERSION="$VERSION" make build-all
 
-      - name: Create release with auto-generated notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify binary version
+        run: ./dist/bwh-linux-amd64 --version | grep -F "$VERSION"
+
+      - name: Create draft release with auto-generated notes
         run: |
-          VERSION=${{ github.event.inputs.version }}
-          gh release create ${VERSION} \
+          gh release create "$VERSION" \
+            --verify-tag \
             --generate-notes \
-            --title "${VERSION}" \
+            --title "$VERSION" \
+            --draft \
             dist/*
