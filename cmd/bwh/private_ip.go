@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -164,7 +165,7 @@ func runPrivateIPAssign(ctx context.Context, api privateIPWriteAPI, resolvedName
 	if !serviceInfo.PlanPrivateNetworkAvailable || !serviceInfo.LocationPrivateNetworkAvailable {
 		return fmt.Errorf("private IPv4 is not available for this plan or location")
 	}
-	if ip != "" && containsString(serviceInfo.PrivateIPAddresses, ip) {
+	if ip != "" && slices.Contains(serviceInfo.PrivateIPAddresses, ip) {
 		fmt.Printf("✅ Private IPv4 address %s is already assigned (no change needed)\n", ip)
 		return nil
 	}
@@ -175,7 +176,7 @@ func runPrivateIPAssign(ctx context.Context, api privateIPWriteAPI, resolvedName
 	if len(availableResp.AvailableIPs) == 0 {
 		return fmt.Errorf("no private IPv4 addresses are available")
 	}
-	if ip != "" && !containsString(availableResp.AvailableIPs, ip) {
+	if ip != "" && !slices.Contains(availableResp.AvailableIPs, ip) {
 		return fmt.Errorf("private IPv4 address %s is not available for assignment", ip)
 	}
 	if dryRun {
@@ -226,7 +227,7 @@ func runPrivateIPDelete(ctx context.Context, api privateIPWriteAPI, resolvedName
 	if err != nil {
 		return fmt.Errorf("failed to get service info: %w", err)
 	}
-	if !containsString(serviceInfo.PrivateIPAddresses, ip) {
+	if !slices.Contains(serviceInfo.PrivateIPAddresses, ip) {
 		return fmt.Errorf("private IPv4 address %s is not assigned to instance %s", ip, resolvedName)
 	}
 	if dryRun {

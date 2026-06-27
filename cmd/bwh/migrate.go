@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -117,7 +118,7 @@ var migrateStartCmd = &cli.Command{
 			fmt.Printf("✅ Instance is already in migration location '%s' (no change needed)\n", locationID)
 			return nil
 		}
-		if !containsString(locations.Locations, locationID) {
+		if !slices.Contains(locations.Locations, locationID) {
 			return fmt.Errorf("migration location %q is not available for instance %s", locationID, resolvedName)
 		}
 

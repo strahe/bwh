@@ -109,15 +109,17 @@ func runResetPassword(ctx context.Context, api resetPasswordAPI, resolvedName, o
 	if err != nil {
 		return fmt.Errorf("failed to reset root password: %w", err)
 	}
+	keepOutput = true
 
 	passwordContent := fmt.Sprintf("Root Password for BWH Instance: %s\n", resolvedName)
 	passwordContent += fmt.Sprintf("Generated at: %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
 	passwordContent += fmt.Sprintf("Password: %s\n", result.Password)
 
 	if err := output.write(passwordContent); err != nil {
-		return fmt.Errorf("failed to write password to file: %w", err)
+		output.preserve()
+		printPasswordOutputFailure(absPath, output.tempPath, err)
+		return fmt.Errorf("root password was reset, but failed to save password to file: %w", err)
 	}
-	keepOutput = true
 
 	fmt.Printf("\n✅ Root password reset successfully!\n")
 	fmt.Printf("🔑 Password saved to: %s\n", absPath)
@@ -188,6 +190,9 @@ func (o *passwordOutputFile) write(content string) error {
 	if _, err := o.file.WriteString(content); err != nil {
 		return err
 	}
+	if err := o.file.Sync(); err != nil {
+		return err
+	}
 	if err := o.file.Close(); err != nil {
 		o.closed = true
 		return err
@@ -199,6 +204,14 @@ func (o *passwordOutputFile) write(content string) error {
 	return nil
 }
 
+func (o *passwordOutputFile) preserve() {
+	if o == nil || o.closed {
+		return
+	}
+	_ = o.file.Close()
+	o.closed = true
+}
+
 func (o *passwordOutputFile) abort() {
 	if o == nil {
 		return
@@ -208,4 +221,10 @@ func (o *passwordOutputFile) abort() {
 		o.closed = true
 	}
 	_ = os.Remove(o.tempPath)
+}
+
+func printPasswordOutputFailure(targetPath, tempPath string, err error) {
+	fmt.Printf("\n⚠️  Root password was reset, but saving it to '%s' failed: %v\n", targetPath, err)
+	fmt.Printf("⚠️  Temporary password file preserved at: %s\n", tempPath)
+	fmt.Printf("⚠️  Treat this file as sensitive and move it to a safe location immediately.\n")
 }

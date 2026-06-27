@@ -135,15 +135,6 @@ func sameStringSlices(a, b []string) bool {
 	return slices.Equal(normalizedA, normalizedB)
 }
 
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
 func trimIPv6Subnet(subnet string) string {
 	return strings.TrimSuffix(strings.TrimSpace(subnet), "/64")
 }

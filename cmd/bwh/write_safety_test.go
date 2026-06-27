@@ -466,6 +466,48 @@ func TestRunResetPasswordRemovesNewOutputOnAPIError(t *testing.T) {
 	}
 }
 
+func TestRunResetPasswordPreservesRecoveryFileAfterAPISuccess(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "password.txt")
+	api := &fakeResetPasswordAPI{
+		beforeCall: func() error {
+			return os.Mkdir(path, 0o700)
+		},
+	}
+
+	var err error
+	out := captureStdout(t, func() {
+		err = runResetPassword(context.Background(), api, "test", path, false, true, confirmNo)
+	})
+	if err == nil {
+		t.Fatal("runResetPassword() error = nil, want save error after API success")
+	}
+	if !strings.Contains(err.Error(), "root password was reset") {
+		t.Fatalf("error does not make remote side effect clear: %v", err)
+	}
+	if api.calls != 1 {
+		t.Fatalf("calls = %d, want 1", api.calls)
+	}
+	if !strings.Contains(out, "Root password was reset") || !strings.Contains(out, "Temporary password file preserved") {
+		t.Fatalf("output missing recovery warning:\n%s", out)
+	}
+
+	matches, globErr := filepath.Glob(filepath.Join(dir, ".password.txt.tmp-*"))
+	if globErr != nil {
+		t.Fatalf("failed to glob temporary output files: %v", globErr)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("temporary output files = %v, want one preserved file", matches)
+	}
+	content, readErr := os.ReadFile(matches[0])
+	if readErr != nil {
+		t.Fatalf("failed to read preserved temporary output file: %v", readErr)
+	}
+	if !strings.Contains(string(content), "Password: secret") {
+		t.Fatalf("preserved temporary output missing password:\n%s", content)
+	}
+}
+
 func TestPasswordOutputPreservesExistingFileOnWriteError(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/password.txt"

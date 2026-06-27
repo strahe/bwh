@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/strahe/bwh/pkg/client"
 	"github.com/urfave/cli/v3"
@@ -109,7 +110,7 @@ func runMountISO(ctx context.Context, api isoAPI, resolvedName, iso string, dryR
 	if err != nil {
 		return fmt.Errorf("failed to get service info: %w", err)
 	}
-	if !containsString(info.AvailableISOs, iso) {
+	if !slices.Contains(info.AvailableISOs, iso) {
 		return fmt.Errorf("ISO image %q is not available for instance %s", iso, resolvedName)
 	}
 	if info.ISO1 == iso {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/strahe/bwh/pkg/client"
@@ -236,7 +237,7 @@ func runSetPTR(ctx context.Context, api ptrAPI, resolvedName, ip, ptr string, dr
 	if !info.RDNSAPIAvailable {
 		return fmt.Errorf("rDNS API is not available for instance %s", resolvedName)
 	}
-	if !containsString(info.IPAddresses, ip) {
+	if !slices.Contains(info.IPAddresses, ip) {
 		return fmt.Errorf("IP address %s is not assigned to instance %s", ip, resolvedName)
 	}
 	currentPTR := ""
