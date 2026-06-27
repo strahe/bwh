@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// BaseResponse represents the base response structure for API calls
+// BaseResponse represents the base response structure for API calls.
 type BaseResponse struct {
 	Error                 int                    `json:"error"`
 	Message               string                 `json:"message,omitempty"`
@@ -14,7 +14,7 @@ type BaseResponse struct {
 	AdditionalLockingInfo *AdditionalLockingInfo `json:"additionalLockingInfo,omitempty"`
 }
 
-// ServiceInfo represents the complete BWH VPS service information
+// ServiceInfo represents the complete BWH VPS service information.
 type ServiceInfo struct {
 	BaseResponse
 
@@ -70,7 +70,7 @@ type ServiceInfo struct {
 	MaxAbusePoints   int  `json:"max_abuse_points"`   // Maximum abuse points allowed by plan in a calendar year
 }
 
-// CreateSnapshotResponse represents the response from creating a snapshot
+// CreateSnapshotResponse represents the response from creating a snapshot.
 type CreateSnapshotResponse struct {
 	BaseResponse
 	NotificationEmail string `json:"notificationEmail"`
@@ -112,7 +112,7 @@ func (n *IPNullroutes) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// FlexibleInt is a type that can unmarshal both string and int from JSON
+// FlexibleInt can unmarshal both string and int values from JSON.
 type FlexibleInt struct {
 	Value int64
 }
@@ -138,7 +138,7 @@ func (f *FlexibleInt) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// LiveServiceInfo represents the complete live VPS information including ServiceInfo and real-time status
+// LiveServiceInfo represents the complete live VPS information including ServiceInfo and real-time status.
 type LiveServiceInfo struct {
 	ServiceInfo
 
@@ -164,14 +164,14 @@ type LiveServiceInfo struct {
 	ScreendumpPngBase64 string      `json:"screendump_png_base64,omitempty"` // base64 encoded PNG screenshot of VGA console
 }
 
-// AvailableOSResponse represents the response from getAvailableOS API call
+// AvailableOSResponse represents the response from getAvailableOS API call.
 type AvailableOSResponse struct {
 	BaseResponse
 	Installed string   `json:"installed"` // Currently installed Operating System
 	Templates []string `json:"templates"` // Array of available OS templates
 }
 
-// UsageDataPoint represents a single data point in usage statistics
+// UsageDataPoint represents a single data point in usage statistics.
 type UsageDataPoint struct {
 	Timestamp       int64 `json:"timestamp"`         // Unix timestamp
 	CPUUsage        int   `json:"cpu_usage"`         // CPU usage percentage
@@ -181,14 +181,14 @@ type UsageDataPoint struct {
 	DiskWriteBytes  int64 `json:"disk_write_bytes"`  // Disk write bytes
 }
 
-// UsageStatsResponse represents the response from getRawUsageStats API call
+// UsageStatsResponse represents the response from getRawUsageStats API call.
 type UsageStatsResponse struct {
 	BaseResponse
 	Data   []UsageDataPoint `json:"data"`    // Array of usage data points
 	VMType string           `json:"vm_type"` // VM type (kvm/ovz)
 }
 
-// AuditLogEntry represents a single audit log entry
+// AuditLogEntry represents a single audit log entry.
 type AuditLogEntry struct {
 	Timestamp     int64  `json:"timestamp"`      // Unix timestamp of the event
 	RequestorIPv4 uint32 `json:"requestor_ipv4"` // IPv4 address of the requestor (as integer)
@@ -196,19 +196,19 @@ type AuditLogEntry struct {
 	Summary       string `json:"summary"`        // Human-readable summary of the event
 }
 
-// AuditLogResponse represents the response from getAuditLog API call
+// AuditLogResponse represents the response from getAuditLog API call.
 type AuditLogResponse struct {
 	BaseResponse
 	LogEntries []AuditLogEntry `json:"log_entries"` // Array of audit log entries
 }
 
-// ResetRootPasswordResponse represents the response from resetRootPassword API call
+// ResetRootPasswordResponse represents the response from resetRootPassword API call.
 type ResetRootPasswordResponse struct {
 	BaseResponse
 	Password string `json:"password"` // The new root password
 }
 
-// SnapshotInfo represents a single snapshot
+// SnapshotInfo represents a single snapshot.
 type SnapshotInfo struct {
 	FileName        string      `json:"fileName"`        // File name of the snapshot
 	OS              string      `json:"os"`              // Operating system of the snapshot
@@ -222,19 +222,19 @@ type SnapshotInfo struct {
 	DownloadLinkSSL string      `json:"downloadLinkSSL"` // HTTPS download link
 }
 
-// SnapshotListResponse represents the response from snapshot/list API call
+// SnapshotListResponse represents the response from snapshot/list API call.
 type SnapshotListResponse struct {
 	BaseResponse
 	Snapshots []SnapshotInfo `json:"snapshots"` // Array of snapshots
 }
 
-// SnapshotExportResponse represents the response from snapshot/export API call
+// SnapshotExportResponse represents the response from snapshot/export API call.
 type SnapshotExportResponse struct {
 	BaseResponse
 	Token string `json:"token"` // Token for import
 }
 
-// BackupInfo represents a single backup entry
+// BackupInfo represents a single backup entry.
 type BackupInfo struct {
 	Token     string `json:"-"`         // Backup token (from map key)
 	Size      int64  `json:"size"`      // Backup size in bytes
@@ -243,13 +243,13 @@ type BackupInfo struct {
 	Timestamp int64  `json:"timestamp"` // Unix timestamp
 }
 
-// BackupListResponse represents the response from backup/list API call
+// BackupListResponse represents the response from backup/list API call.
 type BackupListResponse struct {
 	BaseResponse
 	Backups map[string]BackupInfo `json:"backups"` // Map of backup token to backup info
 }
 
-// RateLimitStatus represents the response from getRateLimitStatus API call
+// RateLimitStatus represents the response from getRateLimitStatus API call.
 type RateLimitStatus struct {
 	BaseResponse
 	RemainingPoints15Min int `json:"remaining_points_15min"` // API calls remaining in 15-minute window
@@ -368,7 +368,7 @@ type SetNotificationPreferencesResponse struct {
 	FriendlyDescriptions      NotificationPreferenceDescriptionMap `json:"friendly_descriptions"`
 }
 
-// SshKeysResponse represents the response from getSshKeys API call
+// SshKeysResponse represents the response from getSshKeys API call.
 type SshKeysResponse struct {
 	BaseResponse
 	SshKeysVeid               string `json:"ssh_keys_veid"`                // Per-VM keys in Hypervisor Vault (newline-separated)
@@ -379,32 +379,32 @@ type SshKeysResponse struct {
 	ShortenedSshKeysPreferred string `json:"shortened_ssh_keys_preferred"` // Visually shortened preferred keys
 }
 
-// GetSshKeysVeidSlice returns VM SSH keys as a slice
+// GetSshKeysVeidSlice returns VM SSH keys as a slice.
 func (r *SshKeysResponse) GetSshKeysVeidSlice() []string {
 	return splitSshKeys(r.SshKeysVeid)
 }
 
-// GetSshKeysUserSlice returns user SSH keys as a slice
+// GetSshKeysUserSlice returns user SSH keys as a slice.
 func (r *SshKeysResponse) GetSshKeysUserSlice() []string {
 	return splitSshKeys(r.SshKeysUser)
 }
 
-// GetSshKeysPreferredSlice returns preferred SSH keys as a slice
+// GetSshKeysPreferredSlice returns preferred SSH keys as a slice.
 func (r *SshKeysResponse) GetSshKeysPreferredSlice() []string {
 	return splitSshKeys(r.SshKeysPreferred)
 }
 
-// GetShortenedSshKeysVeidSlice returns shortened VM SSH keys as a slice
+// GetShortenedSshKeysVeidSlice returns shortened VM SSH keys as a slice.
 func (r *SshKeysResponse) GetShortenedSshKeysVeidSlice() []string {
 	return splitSshKeys(r.ShortenedSshKeysVeid)
 }
 
-// GetShortenedSshKeysUserSlice returns shortened user SSH keys as a slice
+// GetShortenedSshKeysUserSlice returns shortened user SSH keys as a slice.
 func (r *SshKeysResponse) GetShortenedSshKeysUserSlice() []string {
 	return splitSshKeys(r.ShortenedSshKeysUser)
 }
 
-// GetShortenedSshKeysPreferredSlice returns shortened preferred SSH keys as a slice
+// GetShortenedSshKeysPreferredSlice returns shortened preferred SSH keys as a slice.
 func (r *SshKeysResponse) GetShortenedSshKeysPreferredSlice() []string {
 	return splitSshKeys(r.ShortenedSshKeysPreferred)
 }
@@ -425,25 +425,25 @@ func splitSshKeys(keys string) []string {
 	return result
 }
 
-// IPv6AddResponse represents the response from ipv6/add API call
+// IPv6AddResponse represents the response from ipv6/add API call.
 type IPv6AddResponse struct {
 	BaseResponse
 	AssignedSubnet string `json:"assigned_subnet"` // Newly assigned IPv6 /64 subnet
 }
 
-// PrivateIPAvailableResponse represents the response from privateIp/getAvailableIps API call
+// PrivateIPAvailableResponse represents the response from privateIp/getAvailableIps API call.
 type PrivateIPAvailableResponse struct {
 	BaseResponse
 	AvailableIPs []string `json:"available_ips"` // Array of available private IPv4 addresses
 }
 
-// PrivateIPAssignResponse represents the response from privateIp/assign API call
+// PrivateIPAssignResponse represents the response from privateIp/assign API call.
 type PrivateIPAssignResponse struct {
 	BaseResponse
 	AssignedIPs []string `json:"assigned_ips"` // Array of successfully assigned private IPv4 addresses
 }
 
-// MigrateLocationsResponse represents the response from migrate/getLocations API call
+// MigrateLocationsResponse represents the response from migrate/getLocations API call.
 type MigrateLocationsResponse struct {
 	BaseResponse
 	CurrentLocation         string            `json:"currentLocation"`         // Current VPS location ID
@@ -452,7 +452,7 @@ type MigrateLocationsResponse struct {
 	DataTransferMultipliers map[string]int    `json:"dataTransferMultipliers"` // Map of location ID to data transfer multiplier
 }
 
-// MigrateStartResponse represents the response from migrate/start API call
+// MigrateStartResponse represents the response from migrate/start API call.
 type MigrateStartResponse struct {
 	BaseResponse
 	NotificationEmail string   `json:"notificationEmail"` // E-mail where completion notification will be sent

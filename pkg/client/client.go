@@ -16,7 +16,7 @@ const (
 	defaultBaseURL = "https://api.64clouds.com/v1"
 )
 
-// Client represents a BandwagonHost API client
+// Client represents a BandwagonHost API client.
 type Client struct {
 	apiKey     string
 	veid       string
@@ -24,7 +24,7 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient creates a new BandwagonHost client
+// NewClient creates a new BandwagonHost client.
 func NewClient(apiKey, veid string) *Client {
 	return &Client{
 		apiKey:  apiKey,
@@ -36,12 +36,12 @@ func NewClient(apiKey, veid string) *Client {
 	}
 }
 
-// SetBaseURL sets a custom base URL for the API client
+// SetBaseURL sets a custom base URL for the API client.
 func (c *Client) SetBaseURL(baseURL string) {
 	c.baseURL = baseURL
 }
 
-// GetServiceInfo gets information about the server
+// GetServiceInfo gets information about the server.
 func (c *Client) GetServiceInfo(ctx context.Context) (*ServiceInfo, error) {
 	var serviceInfo ServiceInfo
 	if err := c.doRequest(ctx, "getServiceInfo", nil, &serviceInfo); err != nil {
@@ -51,8 +51,8 @@ func (c *Client) GetServiceInfo(ctx context.Context) (*ServiceInfo, error) {
 	return wrapErrorWithBase(&serviceInfo, serviceInfo.BaseResponse)
 }
 
-// GetLiveServiceInfo gets real-time information about the server including detailed VPS status
-// This call may take up to 15 seconds to complete as it queries the actual VPS status
+// GetLiveServiceInfo gets real-time information about the server including detailed VPS status.
+// This call may take up to 15 seconds to complete as it queries the actual VPS status.
 func (c *Client) GetLiveServiceInfo(ctx context.Context) (*LiveServiceInfo, error) {
 	var liveServiceInfo LiveServiceInfo
 	if err := c.doRequest(ctx, "getLiveServiceInfo", nil, &liveServiceInfo); err != nil {
@@ -62,7 +62,7 @@ func (c *Client) GetLiveServiceInfo(ctx context.Context) (*LiveServiceInfo, erro
 	return wrapErrorWithBase(&liveServiceInfo, liveServiceInfo.BaseResponse)
 }
 
-// CreateSnapshot creates a snapshot with optional description
+// CreateSnapshot creates a snapshot with optional description.
 func (c *Client) CreateSnapshot(ctx context.Context, description string) (*CreateSnapshotResponse, error) {
 	params := map[string]string{}
 	if description != "" {
@@ -77,7 +77,7 @@ func (c *Client) CreateSnapshot(ctx context.Context, description string) (*Creat
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// ListSnapshots gets the list of snapshots
+// ListSnapshots gets the list of snapshots.
 func (c *Client) ListSnapshots(ctx context.Context) (*SnapshotListResponse, error) {
 	var resp SnapshotListResponse
 	if err := c.doRequest(ctx, "snapshot/list", nil, &resp); err != nil {
@@ -87,7 +87,7 @@ func (c *Client) ListSnapshots(ctx context.Context) (*SnapshotListResponse, erro
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// DeleteSnapshot deletes a snapshot by fileName
+// DeleteSnapshot deletes a snapshot by fileName.
 func (c *Client) DeleteSnapshot(ctx context.Context, fileName string) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "snapshot/delete", map[string]string{"snapshot": fileName}, &resp); err != nil {
@@ -97,7 +97,7 @@ func (c *Client) DeleteSnapshot(ctx context.Context, fileName string) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// RestoreSnapshot restores a snapshot by fileName (overwrites all data on VPS)
+// RestoreSnapshot restores a snapshot by fileName and overwrites all data on the VPS.
 func (c *Client) RestoreSnapshot(ctx context.Context, fileName string) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "snapshot/restore", map[string]string{"snapshot": fileName}, &resp); err != nil {
@@ -107,7 +107,7 @@ func (c *Client) RestoreSnapshot(ctx context.Context, fileName string) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// ToggleSnapshotSticky sets or removes sticky attribute for a snapshot
+// ToggleSnapshotSticky sets or removes sticky attribute for a snapshot.
 func (c *Client) ToggleSnapshotSticky(ctx context.Context, fileName string, sticky bool) error {
 	stickyStr := "0"
 	if sticky {
@@ -125,7 +125,7 @@ func (c *Client) ToggleSnapshotSticky(ctx context.Context, fileName string, stic
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// ExportSnapshot generates a token for transferring snapshot to another instance
+// ExportSnapshot generates a token for transferring a snapshot to another instance.
 func (c *Client) ExportSnapshot(ctx context.Context, fileName string) (*SnapshotExportResponse, error) {
 	var resp SnapshotExportResponse
 	if err := c.doPostRequest(ctx, "snapshot/export", map[string]string{"snapshot": fileName}, &resp); err != nil {
@@ -135,7 +135,7 @@ func (c *Client) ExportSnapshot(ctx context.Context, fileName string) (*Snapshot
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// ImportSnapshot imports a snapshot from another instance using VEID and token
+// ImportSnapshot imports a snapshot from another instance using VEID and token.
 func (c *Client) ImportSnapshot(ctx context.Context, sourceVeid, sourceToken string) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "snapshot/import", map[string]string{
@@ -148,7 +148,7 @@ func (c *Client) ImportSnapshot(ctx context.Context, sourceVeid, sourceToken str
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// Restart restarts the VPS
+// Restart restarts the VPS.
 func (c *Client) Restart(ctx context.Context) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "restart", nil, &resp); err != nil {
@@ -158,7 +158,7 @@ func (c *Client) Restart(ctx context.Context) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// Start starts the VPS
+// Start starts the VPS.
 func (c *Client) Start(ctx context.Context) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "start", nil, &resp); err != nil {
@@ -168,7 +168,7 @@ func (c *Client) Start(ctx context.Context) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// Stop stops the VPS
+// Stop stops the VPS.
 func (c *Client) Stop(ctx context.Context) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "stop", nil, &resp); err != nil {
@@ -178,7 +178,7 @@ func (c *Client) Stop(ctx context.Context) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// Kill forcefully stops a VPS that is stuck and cannot be stopped by normal means
+// Kill forcefully stops a VPS that is stuck and cannot be stopped by normal means.
 // Please use this feature with great care as any unsaved data will be lost.
 func (c *Client) Kill(ctx context.Context) error {
 	var resp BaseResponse
@@ -189,7 +189,7 @@ func (c *Client) Kill(ctx context.Context) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// GetAvailableOS gets the list of available operating systems for reinstallation
+// GetAvailableOS gets the list of available operating systems for reinstallation.
 func (c *Client) GetAvailableOS(ctx context.Context) (*AvailableOSResponse, error) {
 	var resp AvailableOSResponse
 	if err := c.doRequest(ctx, "getAvailableOS", nil, &resp); err != nil {
@@ -199,7 +199,7 @@ func (c *Client) GetAvailableOS(ctx context.Context) (*AvailableOSResponse, erro
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// ReinstallOS reinstalls the operating system
+// ReinstallOS reinstalls the operating system.
 // WARNING: This will destroy all data on the VPS!
 func (c *Client) ReinstallOS(ctx context.Context, osTemplate string) error {
 	var resp BaseResponse
@@ -210,7 +210,7 @@ func (c *Client) ReinstallOS(ctx context.Context, osTemplate string) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// GetRawUsageStats gets detailed usage statistics
+// GetRawUsageStats gets detailed usage statistics.
 func (c *Client) GetRawUsageStats(ctx context.Context) (*UsageStatsResponse, error) {
 	var resp UsageStatsResponse
 	if err := c.doRequest(ctx, "getRawUsageStats", nil, &resp); err != nil {
@@ -220,7 +220,7 @@ func (c *Client) GetRawUsageStats(ctx context.Context) (*UsageStatsResponse, err
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// GetAuditLog gets audit log entries for the VPS
+// GetAuditLog gets audit log entries for the VPS.
 func (c *Client) GetAuditLog(ctx context.Context) (*AuditLogResponse, error) {
 	var resp AuditLogResponse
 	if err := c.doRequest(ctx, "getAuditLog", nil, &resp); err != nil {
@@ -230,7 +230,7 @@ func (c *Client) GetAuditLog(ctx context.Context) (*AuditLogResponse, error) {
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// ResetRootPassword resets the root password and returns the new password
+// ResetRootPassword resets the root password and returns the new password.
 func (c *Client) ResetRootPassword(ctx context.Context) (*ResetRootPasswordResponse, error) {
 	var resp ResetRootPasswordResponse
 	if err := c.doPostRequest(ctx, "resetRootPassword", nil, &resp); err != nil {
@@ -306,7 +306,7 @@ func (c *Client) executeRequest(httpClient *http.Client, req *http.Request, resu
 	return nil
 }
 
-// ListBackups lists all available backups
+// ListBackups lists all available backups.
 func (c *Client) ListBackups(ctx context.Context) (*BackupListResponse, error) {
 	var resp BackupListResponse
 	if err := c.doRequest(ctx, "backup/list", nil, &resp); err != nil {
@@ -316,7 +316,7 @@ func (c *Client) ListBackups(ctx context.Context) (*BackupListResponse, error) {
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// CopyBackupToSnapshot copies a backup to a restorable snapshot
+// CopyBackupToSnapshot copies a backup to a restorable snapshot.
 func (c *Client) CopyBackupToSnapshot(ctx context.Context, backupToken string) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "backup/copyToSnapshot", map[string]string{
@@ -328,7 +328,7 @@ func (c *Client) CopyBackupToSnapshot(ctx context.Context, backupToken string) e
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// SetHostname sets a new hostname for the VPS
+// SetHostname sets a new hostname for the VPS.
 func (c *Client) SetHostname(ctx context.Context, newHostname string) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "setHostname", map[string]string{
@@ -340,7 +340,7 @@ func (c *Client) SetHostname(ctx context.Context, newHostname string) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// GetRateLimitStatus gets current API rate limit status
+// GetRateLimitStatus gets current API rate limit status.
 func (c *Client) GetRateLimitStatus(ctx context.Context) (*RateLimitStatus, error) {
 	var resp RateLimitStatus
 	if err := c.doRequest(ctx, "getRateLimitStatus", nil, &resp); err != nil {
@@ -464,7 +464,7 @@ func encodeNotificationPreferences(preferences map[string]bool) (string, error) 
 	return string(data), nil
 }
 
-// GetSshKeys gets SSH keys from both Hypervisor Vault and Billing Portal
+// GetSshKeys gets SSH keys from both Hypervisor Vault and Billing Portal.
 func (c *Client) GetSshKeys(ctx context.Context) (*SshKeysResponse, error) {
 	var resp SshKeysResponse
 	if err := c.doRequest(ctx, "getSshKeys", nil, &resp); err != nil {
@@ -474,7 +474,7 @@ func (c *Client) GetSshKeys(ctx context.Context) (*SshKeysResponse, error) {
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// UpdateSshKeys updates per-VM SSH keys in Hypervisor Vault (replaces all existing keys)
+// UpdateSshKeys updates per-VM SSH keys in Hypervisor Vault and replaces all existing keys.
 func (c *Client) UpdateSshKeys(ctx context.Context, sshKeys []string) error {
 	params := map[string]string{}
 
@@ -493,7 +493,7 @@ func (c *Client) UpdateSshKeys(ctx context.Context, sshKeys []string) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// SetPTR sets new PTR (rDNS) record for IP address
+// SetPTR sets a new PTR (rDNS) record for an IP address.
 func (c *Client) SetPTR(ctx context.Context, ip, ptr string) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "setPTR", map[string]string{
@@ -506,8 +506,8 @@ func (c *Client) SetPTR(ctx context.Context, ip, ptr string) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// MountISO sets ISO image to boot from
-// VM must be completely shut down and restarted after this API call
+// MountISO sets the ISO image to boot from.
+// The VM must be completely shut down and restarted after this API call.
 func (c *Client) MountISO(ctx context.Context, iso string) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "iso/mount", map[string]string{
@@ -519,8 +519,8 @@ func (c *Client) MountISO(ctx context.Context, iso string) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// UnmountISO removes ISO image and configures VM to boot from primary storage
-// VM must be completely shut down and restarted after this API call
+// UnmountISO removes the ISO image and configures the VM to boot from primary storage.
+// The VM must be completely shut down and restarted after this API call.
 func (c *Client) UnmountISO(ctx context.Context) error {
 	var resp BaseResponse
 	if err := c.doPostRequest(ctx, "iso/unmount", nil, &resp); err != nil {
@@ -530,7 +530,7 @@ func (c *Client) UnmountISO(ctx context.Context) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// GetMigrateLocations returns all possible migration locations and metadata
+// GetMigrateLocations returns all possible migration locations and metadata.
 func (c *Client) GetMigrateLocations(ctx context.Context) (*MigrateLocationsResponse, error) {
 	var resp MigrateLocationsResponse
 	if err := c.doRequest(ctx, "migrate/getLocations", nil, &resp); err != nil {
@@ -540,14 +540,14 @@ func (c *Client) GetMigrateLocations(ctx context.Context) (*MigrateLocationsResp
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// StartMigration starts VPS migration to a new location with a default 15-minute timeout
-// NOTE: Starting migration will replace all IPv4 addresses of the VPS
+// StartMigration starts VPS migration to a new location with a default 15-minute timeout.
+// Starting migration will replace all IPv4 addresses of the VPS.
 func (c *Client) StartMigration(ctx context.Context, locationID string) (*MigrateStartResponse, error) {
 	return c.StartMigrationWithTimeout(ctx, locationID, 15*time.Minute)
 }
 
-// StartMigrationWithTimeout starts VPS migration to a new location with a custom timeout
-// NOTE: Starting migration will replace all IPv4 addresses of the VPS
+// StartMigrationWithTimeout starts VPS migration to a new location with a custom timeout.
+// Starting migration will replace all IPv4 addresses of the VPS.
 func (c *Client) StartMigrationWithTimeout(ctx context.Context, locationID string, timeout time.Duration) (*MigrateStartResponse, error) {
 	params := map[string]string{
 		"location": locationID,
@@ -632,7 +632,7 @@ func wrapOnlyErrorFromBase(base BaseResponse) error {
 	return nil
 }
 
-// AddIPv6 assigns a new IPv6 /64 subnet to the VPS
+// AddIPv6 assigns a new IPv6 /64 subnet to the VPS.
 func (c *Client) AddIPv6(ctx context.Context) (*IPv6AddResponse, error) {
 	var resp IPv6AddResponse
 	if err := c.doPostRequest(ctx, "ipv6/add", nil, &resp); err != nil {
@@ -642,7 +642,7 @@ func (c *Client) AddIPv6(ctx context.Context) (*IPv6AddResponse, error) {
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// DeleteIPv6 releases a specified IPv6 /64 subnet from the VPS
+// DeleteIPv6 releases a specified IPv6 /64 subnet from the VPS.
 func (c *Client) DeleteIPv6(ctx context.Context, subnet string) error {
 	params := map[string]string{
 		"ip": subnet,
@@ -656,7 +656,7 @@ func (c *Client) DeleteIPv6(ctx context.Context, subnet string) error {
 	return wrapOnlyErrorFromBase(resp)
 }
 
-// GetAvailablePrivateIPs returns all available private IPv4 addresses that can be assigned
+// GetAvailablePrivateIPs returns all available private IPv4 addresses that can be assigned.
 func (c *Client) GetAvailablePrivateIPs(ctx context.Context) (*PrivateIPAvailableResponse, error) {
 	var resp PrivateIPAvailableResponse
 	if err := c.doRequest(ctx, "privateIp/getAvailableIps", nil, &resp); err != nil {
@@ -666,7 +666,7 @@ func (c *Client) GetAvailablePrivateIPs(ctx context.Context) (*PrivateIPAvailabl
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// AssignPrivateIP assigns a private IPv4 address; if ip is empty, a random one will be assigned
+// AssignPrivateIP assigns a private IPv4 address; if ip is empty, a random one will be assigned.
 func (c *Client) AssignPrivateIP(ctx context.Context, ip string) (*PrivateIPAssignResponse, error) {
 	params := map[string]string{}
 	if strings.TrimSpace(ip) != "" {
@@ -681,7 +681,7 @@ func (c *Client) AssignPrivateIP(ctx context.Context, ip string) (*PrivateIPAssi
 	return wrapErrorWithBase(&resp, resp.BaseResponse)
 }
 
-// DeletePrivateIP deletes a private IPv4 address
+// DeletePrivateIP deletes a private IPv4 address.
 func (c *Client) DeletePrivateIP(ctx context.Context, ip string) error {
 	params := map[string]string{
 		"ip": ip,

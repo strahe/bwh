@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/strahe/bwh/actions/workflows/ci.yml/badge.svg)](https://github.com/strahe/bwh/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/strahe/bwh)](https://goreportcard.com/report/github.com/strahe/bwh)
+[![Go Reference](https://pkg.go.dev/badge/github.com/strahe/bwh/pkg/client.svg)](https://pkg.go.dev/github.com/strahe/bwh/pkg/client)
 [![Release](https://img.shields.io/github/v/release/strahe/bwh)](https://github.com/strahe/bwh/releases)
 
 > **English | [中文](README.zh.md)**
@@ -19,7 +20,7 @@ Prerequisites: Go 1.24+; KiwiVM VEID and API key.
 go install github.com/strahe/bwh/cmd/bwh@latest
 
 # Go SDK
-go get github.com/strahe/bwh
+go get github.com/strahe/bwh/pkg/client@latest
 ```
 
 ## Quick Start
@@ -100,7 +101,7 @@ backups, err := c.ListBackups(ctx)
 
 ### Available Methods
 
-The SDK sends read-only API calls with `GET` query parameters and state-changing API calls with `POST application/x-www-form-urlencoded` form data, so write parameters and credentials are not placed in the URL.
+The SDK sends read-only API calls with `GET` query parameters and state-changing API calls with `POST application/x-www-form-urlencoded` form data. For write calls, request parameters and credentials are not placed in the URL.
 
 **Server Management**: `GetServiceInfo`, `GetLiveServiceInfo`, `Start`, `Stop`, `Restart`, `Kill`, `SetHostname`, `ReinstallOS`, `ResetRootPassword`, `MountISO`, `UnmountISO`
 
@@ -116,7 +117,7 @@ The SDK sends read-only API calls with `GET` query parameters and state-changing
 
 **Network**: SSH key management, IP/reverse DNS configuration, IPv6 subnet management, private IPv4 management
 
-*Complete API reference*: View [pkg/client documentation](./pkg/client) or run `go doc github.com/strahe/bwh/pkg/client` for all available methods.
+*Complete API reference*: View the [pkg.go.dev package documentation](https://pkg.go.dev/github.com/strahe/bwh/pkg/client) or run `go doc github.com/strahe/bwh/pkg/client` for all available methods.
 
 ## MCP Server Integration
 
