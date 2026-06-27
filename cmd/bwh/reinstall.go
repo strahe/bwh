@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -24,79 +22,90 @@ var reinstallCmd = &cli.Command{
 			Name:  "list",
 			Usage: "list available operating system templates",
 		},
-		&cli.BoolFlag{
-			Name:  "force",
-			Usage: "force reinstall without confirmation (dangerous)",
-		},
+		forceFlag(),
+		yesFlag(),
+		dryRunFlag(),
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		osTemplate := cmd.String("os")
 		listOnly := cmd.Bool("list")
-		force := cmd.Bool("force")
 
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
 		}
 
-		// Get available OS templates
-		osInfo, err := bwhClient.GetAvailableOS(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get available OS templates: %w", err)
-		}
-
-		// If list flag is set, just display available templates
-		if listOnly {
-			displayAvailableOS(osInfo, resolvedName)
-			return nil
-		}
-
-		// If no OS specified, show available options and exit
-		if osTemplate == "" {
-			fmt.Printf("No OS template specified. Use --os flag with one of the following templates:\n\n")
-			displayAvailableOS(osInfo, resolvedName)
-			fmt.Printf("\nExample: bwh reinstall --os ubuntu-24.04-x86_64\n")
-			return nil
-		}
-
-		// Validate OS template
-		if !isValidOSTemplate(osTemplate, osInfo.Templates) {
-			fmt.Printf("❌ Invalid OS template: %s\n\n", osTemplate)
-			fmt.Printf("Available templates:\n")
-			for _, template := range osInfo.Templates {
-				fmt.Printf("  %s\n", template)
-			}
-			return fmt.Errorf("invalid OS template")
-		}
-
-		// Show current and target OS
-		fmt.Printf("Instance: %s\n", resolvedName)
-		fmt.Printf("Current OS: %s\n", osInfo.Installed)
-		fmt.Printf("Target OS:  %s\n", osTemplate)
-		fmt.Printf("\n")
-
-		// Confirmation (unless force is used)
-		if !force {
-			if !confirmReinstall(resolvedName, osInfo.Installed, osTemplate) {
-				fmt.Println("Operation cancelled.")
-				return nil
-			}
-		}
-
-		fmt.Printf("🔄 Starting OS reinstall for instance: %s\n", resolvedName)
-		fmt.Printf("⏳ This may take several minutes...\n")
-
-		// Execute reinstall
-		if err := bwhClient.ReinstallOS(ctx, osTemplate); err != nil {
-			return fmt.Errorf("failed to reinstall OS: %w", err)
-		}
-
-		fmt.Printf("✅ OS reinstall initiated successfully\n")
-		fmt.Printf("📋 Your VPS is being reinstalled with %s\n", osTemplate)
-		fmt.Printf("⚠️  Note: The process may take 5-15 minutes to complete\n")
-
-		return nil
+		return runReinstall(ctx, bwhClient, resolvedName, osTemplate, listOnly, cmd.Bool("dry-run"), skipConfirmOrForce(cmd), confirmReinstall)
 	},
+}
+
+type reinstallAPI interface {
+	GetAvailableOS(context.Context) (*client.AvailableOSResponse, error)
+	ReinstallOS(context.Context, string) error
+}
+
+type reinstallConfirmationFunc func(instanceName, currentOS, targetOS string) (bool, error)
+
+func runReinstall(ctx context.Context, api reinstallAPI, resolvedName, osTemplate string, listOnly, dryRun, skipConfirm bool, confirm reinstallConfirmationFunc) error {
+	osInfo, err := api.GetAvailableOS(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get available OS templates: %w", err)
+	}
+
+	if listOnly {
+		displayAvailableOS(osInfo, resolvedName)
+		return nil
+	}
+
+	if osTemplate == "" {
+		fmt.Printf("No OS template specified. Use --os flag with one of the following templates:\n\n")
+		displayAvailableOS(osInfo, resolvedName)
+		fmt.Printf("\nExample: bwh reinstall --os ubuntu-24.04-x86_64\n")
+		return nil
+	}
+
+	if !isValidOSTemplate(osTemplate, osInfo.Templates) {
+		fmt.Printf("❌ Invalid OS template: %s\n\n", osTemplate)
+		fmt.Printf("Available templates:\n")
+		for _, template := range osInfo.Templates {
+			fmt.Printf("  %s\n", template)
+		}
+		return fmt.Errorf("invalid OS template")
+	}
+
+	fmt.Printf("Instance: %s\n", resolvedName)
+	fmt.Printf("Current OS: %s\n", osInfo.Installed)
+	fmt.Printf("Target OS:  %s\n", osTemplate)
+	fmt.Printf("\n")
+
+	if dryRun {
+		printDryRun("reinstallOS", resolvedName, fmt.Sprintf("os: %s", osTemplate))
+		return nil
+	}
+
+	if !skipConfirm {
+		confirmed, err := confirm(resolvedName, osInfo.Installed, osTemplate)
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			printOperationCancelled()
+			return nil
+		}
+	}
+
+	fmt.Printf("🔄 Starting OS reinstall for instance: %s\n", resolvedName)
+	fmt.Printf("⏳ This may take several minutes...\n")
+
+	if err := api.ReinstallOS(ctx, osTemplate); err != nil {
+		return fmt.Errorf("failed to reinstall OS: %w", err)
+	}
+
+	fmt.Printf("✅ OS reinstall initiated successfully\n")
+	fmt.Printf("📋 Your VPS is being reinstalled with %s\n", osTemplate)
+	fmt.Printf("⚠️  Note: The process may take 5-15 minutes to complete\n")
+
+	return nil
 }
 
 func displayAvailableOS(osInfo *client.AvailableOSResponse, instanceName string) {
@@ -152,7 +161,7 @@ func isValidOSTemplate(template string, availableTemplates []string) bool {
 	return false
 }
 
-func confirmReinstall(instanceName, currentOS, targetOS string) bool {
+func confirmReinstall(instanceName, currentOS, targetOS string) (bool, error) {
 	fmt.Printf("🚨 DANGER: OS REINSTALL WILL DESTROY ALL DATA!\n")
 	fmt.Printf("🚨 This action is IRREVERSIBLE!\n")
 	fmt.Printf("\n")
@@ -163,14 +172,5 @@ func confirmReinstall(instanceName, currentOS, targetOS string) bool {
 	fmt.Printf("⚠️  MAKE SURE YOU HAVE BACKUPS!\n")
 	fmt.Printf("\n")
 	fmt.Printf("To confirm this dangerous operation, type the target OS exactly: %s\n", targetOS)
-	fmt.Printf("Type here: ")
-
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return false
-	}
-
-	response = strings.TrimSpace(response)
-	return response == targetOS
+	return promptExactConfirmation("Type here: ", targetOS)
 }

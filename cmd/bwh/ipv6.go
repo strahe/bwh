@@ -23,50 +23,14 @@ var ipv6Cmd = &cli.Command{
 var ipv6AddCmd = &cli.Command{
 	Name:  "add",
 	Usage: "assign a new IPv6 /64 subnet",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags: writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
 		}
 
-		if !cmd.Bool("yes") {
-			fmt.Printf("Adding IPv6 /64 subnet to instance: %s\n", resolvedName)
-			fmt.Printf("\n💡 This will assign a new IPv6 /64 subnet to your VPS.\n")
-			fmt.Printf("⚠️  A full VM restart (stop + start) will be required after assignment\n")
-			fmt.Printf("   to automatically activate IPv6 networking inside the VM.\n")
-			confirmed, err := promptConfirmation("Continue with IPv6 subnet assignment?")
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				fmt.Printf("Operation cancelled\n")
-				return nil
-			}
-		}
-
-		fmt.Printf("Adding IPv6 subnet to instance: %s\n", resolvedName)
-
-		resp, err := bwhClient.AddIPv6(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to add IPv6 subnet: %w", err)
-		}
-
-		fmt.Printf("✅ IPv6 subnet added successfully\n")
-		fmt.Printf("📋 ASSIGNED SUBNET\n")
-		fmt.Printf("   IPv6 Subnet  : %s/64\n", resp.AssignedSubnet)
-		fmt.Printf("\n⚠️  IMPORTANT: VM restart required for automatic IPv6 activation\n")
-		fmt.Printf("   1. Stop the VM: 'bwh stop' (status must show 'Stopped')\n")
-		fmt.Printf("   2. Start the VM: 'bwh start'\n")
-		fmt.Printf("   This will automatically activate IPv6 networking inside the VM.\n")
-
-		return nil
+		return runIPv6Add(ctx, bwhClient, resolvedName, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -74,13 +38,7 @@ var ipv6DeleteCmd = &cli.Command{
 	Name:      "delete",
 	Usage:     "release an IPv6 /64 subnet",
 	ArgsUsage: "<subnet>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("IPv6 subnet is required")
@@ -95,34 +53,12 @@ var ipv6DeleteCmd = &cli.Command{
 		// Normalize subnet format (remove /64 suffix if present, we'll add it back for display)
 		normalizedSubnet := strings.TrimSuffix(subnet, "/64")
 
-		if !cmd.Bool("yes") {
-			fmt.Printf("⚠️  WARNING: This will release the IPv6 subnet and it cannot be undone.\n")
-			fmt.Printf("The subnet will no longer be available to your VPS.\n")
-			fmt.Printf("\nSubnet to delete: %s/64\n", normalizedSubnet)
-			confirmed, err := promptConfirmation("Continue with IPv6 subnet deletion?")
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				fmt.Printf("Operation cancelled\n")
-				return nil
-			}
-		}
-
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Deleting IPv6 subnet '%s' from instance: %s\n", normalizedSubnet, resolvedName)
-
-		if err := bwhClient.DeleteIPv6(ctx, normalizedSubnet); err != nil {
-			return fmt.Errorf("failed to delete IPv6 subnet: %w", err)
-		}
-
-		fmt.Printf("✅ IPv6 subnet '%s' deleted successfully\n", normalizedSubnet)
-
-		return nil
+		return runIPv6Delete(ctx, bwhClient, resolvedName, normalizedSubnet, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -248,6 +184,118 @@ func displayIPv6InfoCompact(info *client.ServiceInfo, instanceName string) {
 			}
 		}
 	}
+}
+
+type ipv6WriteAPI interface {
+	GetServiceInfo(context.Context) (*client.ServiceInfo, error)
+	AddIPv6(context.Context) (*client.IPv6AddResponse, error)
+	DeleteIPv6(context.Context, string) error
+}
+
+func runIPv6Add(ctx context.Context, api ipv6WriteAPI, resolvedName string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	serviceInfo, err := api.GetServiceInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get service info: %w", err)
+	}
+	if !serviceInfo.LocationIPv6Ready {
+		return fmt.Errorf("IPv6 is not available at this location (%s)", serviceInfo.NodeLocation)
+	}
+	currentIPv6 := countIPv6Subnets(serviceInfo.IPAddresses)
+	if serviceInfo.PlanMaxIPv6s > 0 && currentIPv6 >= serviceInfo.PlanMaxIPv6s {
+		return fmt.Errorf("IPv6 subnet limit reached: %d/%d", currentIPv6, serviceInfo.PlanMaxIPv6s)
+	}
+	if dryRun {
+		printDryRun("ipv6/add", resolvedName, fmt.Sprintf("assigned IPv6 subnets: %d/%d", currentIPv6, serviceInfo.PlanMaxIPv6s))
+		return nil
+	}
+
+	if !skipConfirm {
+		fmt.Printf("Adding IPv6 /64 subnet to instance: %s\n", resolvedName)
+		fmt.Printf("\n💡 This will assign a new IPv6 /64 subnet to your VPS.\n")
+		fmt.Printf("⚠️  A full VM restart (stop + start) will be required after assignment\n")
+		fmt.Printf("   to automatically activate IPv6 networking inside the VM.\n")
+	}
+	confirmed, err := confirmWrite("Continue with IPv6 subnet assignment?", skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Adding IPv6 subnet to instance: %s\n", resolvedName)
+
+	resp, err := api.AddIPv6(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to add IPv6 subnet: %w", err)
+	}
+
+	fmt.Printf("✅ IPv6 subnet added successfully\n")
+	fmt.Printf("📋 ASSIGNED SUBNET\n")
+	fmt.Printf("   IPv6 Subnet  : %s/64\n", resp.AssignedSubnet)
+	fmt.Printf("\n⚠️  IMPORTANT: VM restart required for automatic IPv6 activation\n")
+	fmt.Printf("   1. Stop the VM: 'bwh stop' (status must show 'Stopped')\n")
+	fmt.Printf("   2. Start the VM: 'bwh start'\n")
+	fmt.Printf("   This will automatically activate IPv6 networking inside the VM.\n")
+
+	return nil
+}
+
+func runIPv6Delete(ctx context.Context, api ipv6WriteAPI, resolvedName, normalizedSubnet string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	serviceInfo, err := api.GetServiceInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get service info: %w", err)
+	}
+	if !hasIPv6Subnet(serviceInfo.IPAddresses, normalizedSubnet) {
+		return fmt.Errorf("IPv6 subnet %s/64 is not assigned to instance %s", normalizedSubnet, resolvedName)
+	}
+	if dryRun {
+		printDryRun("ipv6/delete", resolvedName, fmt.Sprintf("subnet: %s/64", normalizedSubnet))
+		return nil
+	}
+
+	if !skipConfirm {
+		fmt.Printf("⚠️  WARNING: This will release the IPv6 subnet and it cannot be undone.\n")
+		fmt.Printf("The subnet will no longer be available to your VPS.\n")
+		fmt.Printf("\nSubnet to delete: %s/64\n", normalizedSubnet)
+	}
+	confirmed, err := confirmWrite("Continue with IPv6 subnet deletion?", skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Deleting IPv6 subnet '%s' from instance: %s\n", normalizedSubnet, resolvedName)
+
+	if err := api.DeleteIPv6(ctx, normalizedSubnet); err != nil {
+		return fmt.Errorf("failed to delete IPv6 subnet: %w", err)
+	}
+
+	fmt.Printf("✅ IPv6 subnet '%s' deleted successfully\n", normalizedSubnet)
+
+	return nil
+}
+
+func countIPv6Subnets(ips []string) int {
+	count := 0
+	for _, ip := range ips {
+		if isIPv6Address(ip) {
+			count++
+		}
+	}
+	return count
+}
+
+func hasIPv6Subnet(ips []string, subnet string) bool {
+	normalized := trimIPv6Subnet(subnet)
+	for _, ip := range ips {
+		if trimIPv6Subnet(ip) == normalized {
+			return true
+		}
+	}
+	return false
 }
 
 // isValidIPv6Subnet validates if the given string is a valid IPv6 address

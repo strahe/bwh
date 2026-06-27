@@ -1,50 +1,53 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
+	"slices"
 	"strings"
 
+	"github.com/strahe/bwh/pkg/client"
 	"github.com/urfave/cli/v3"
 )
 
 var startCmd = &cli.Command{
 	Name:  "start",
 	Usage: "start the VPS",
+	Flags: []cli.Flag{
+		dryRunFlag(),
+	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		return executeVPSAction(ctx, cmd, "start", false)
+		bwhClient, resolvedName, err := createBWHClient(cmd)
+		if err != nil {
+			return err
+		}
+		return runVPSAction(ctx, bwhClient, resolvedName, "start", cmd.Bool("dry-run"), true, promptConfirmation)
 	},
 }
 
 var stopCmd = &cli.Command{
 	Name:  "stop",
 	Usage: "stop the VPS",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags: writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		return executeVPSAction(ctx, cmd, "stop", !cmd.Bool("yes"))
+		bwhClient, resolvedName, err := createBWHClient(cmd)
+		if err != nil {
+			return err
+		}
+		return runVPSAction(ctx, bwhClient, resolvedName, "stop", cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
 var restartCmd = &cli.Command{
 	Name:  "restart",
 	Usage: "restart the VPS",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags: writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		return executeVPSAction(ctx, cmd, "restart", !cmd.Bool("yes"))
+		bwhClient, resolvedName, err := createBWHClient(cmd)
+		if err != nil {
+			return err
+		}
+		return runVPSAction(ctx, bwhClient, resolvedName, "restart", cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -52,13 +55,16 @@ var killCmd = &cli.Command{
 	Name:  "kill",
 	Usage: "forcefully stop a stuck VPS (WARNING: data loss)",
 	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:  "force",
-			Usage: "force kill without confirmation (dangerous)",
-		},
+		forceFlag(),
+		yesFlag(),
+		dryRunFlag(),
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		return executeVPSAction(ctx, cmd, "kill", !cmd.Bool("force"))
+		bwhClient, resolvedName, err := createBWHClient(cmd)
+		if err != nil {
+			return err
+		}
+		return runVPSAction(ctx, bwhClient, resolvedName, "kill", cmd.Bool("dry-run"), skipConfirmOrForce(cmd), confirmKill)
 	},
 }
 
@@ -66,13 +72,7 @@ var hostnameCmd = &cli.Command{
 	Name:      "hostname",
 	Usage:     "set hostname for the VPS",
 	ArgsUsage: "<new_hostname>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("hostname command requires exactly one argument: <new_hostname>")
@@ -88,22 +88,7 @@ var hostnameCmd = &cli.Command{
 			return err
 		}
 
-		// Confirmation prompt
-		if !cmd.Bool("yes") {
-			if !confirmAction("set hostname", resolvedName, newHostname) {
-				fmt.Println("Operation cancelled.")
-				return nil
-			}
-		}
-
-		fmt.Printf("Setting hostname to '%s' for instance: %s\n", newHostname, resolvedName)
-
-		if err := bwhClient.SetHostname(ctx, newHostname); err != nil {
-			return fmt.Errorf("failed to set hostname: %w", err)
-		}
-
-		fmt.Printf("✅ Hostname set to '%s' successfully\n", newHostname)
-		return nil
+		return runSetHostname(ctx, bwhClient, resolvedName, newHostname, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -112,13 +97,7 @@ var setPTRCmd = &cli.Command{
 	Aliases:   []string{"setPTR"},
 	Usage:     "set new PTR (rDNS) record for IP address",
 	ArgsUsage: "<ip> <ptr>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 2 {
 			return fmt.Errorf("setPTR command requires exactly two arguments: <ip> <ptr>")
@@ -139,51 +118,66 @@ var setPTRCmd = &cli.Command{
 			return err
 		}
 
-		// Confirmation prompt
-		if !cmd.Bool("yes") {
-			if !confirmAction("set PTR", resolvedName, ip, ptr) {
-				fmt.Println("Operation cancelled.")
-				return nil
-			}
-		}
-
-		fmt.Printf("Setting PTR record for IP '%s' to '%s' for instance: %s\n", ip, ptr, resolvedName)
-
-		if err := bwhClient.SetPTR(ctx, ip, ptr); err != nil {
-			return fmt.Errorf("failed to set PTR record: %w", err)
-		}
-
-		fmt.Printf("✅ PTR record set for IP '%s' to '%s' successfully\n", ip, ptr)
-		return nil
+		return runSetPTR(ctx, bwhClient, resolvedName, ip, ptr, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
-func executeVPSAction(ctx context.Context, cmd *cli.Command, action string, needsConfirm bool) error {
-	bwhClient, resolvedName, err := createBWHClient(cmd)
+type powerAPI interface {
+	GetLiveServiceInfo(context.Context) (*client.LiveServiceInfo, error)
+	Start(context.Context) error
+	Stop(context.Context) error
+	Restart(context.Context) error
+	Kill(context.Context) error
+}
+
+func runVPSAction(ctx context.Context, api powerAPI, resolvedName, action string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	status := ""
+	if info, err := api.GetLiveServiceInfo(ctx); err == nil {
+		status = strings.ToLower(strings.TrimSpace(info.VeStatus))
+		if status != "" {
+			fmt.Printf("Current VPS status for instance %s: %s\n", resolvedName, info.VeStatus)
+		}
+	} else {
+		fmt.Printf("Warning: failed to read current VPS status: %v\n", err)
+	}
+
+	if action == "start" && status == "running" {
+		fmt.Printf("✅ VPS is already running (no change needed)\n")
+		return nil
+	}
+	if (action == "stop" || action == "kill") && status == "stopped" {
+		fmt.Printf("✅ VPS is already stopped (no change needed)\n")
+		return nil
+	}
+
+	if dryRun {
+		printDryRun(action, resolvedName)
+		return nil
+	}
+
+	prompt := fmt.Sprintf("%s VPS '%s'?", strings.ToUpper(action[:1])+action[1:], resolvedName)
+	if action == "kill" {
+		prompt = fmt.Sprintf("Forcefully kill VPS '%s'?", resolvedName)
+	}
+	confirmed, err := confirmWrite(prompt, skipConfirm, confirm)
 	if err != nil {
 		return err
 	}
-
-	// Confirmation prompt
-	if needsConfirm {
-		if !confirmAction(action, resolvedName) {
-			fmt.Println("Operation cancelled.")
-			return nil
-		}
+	if !confirmed {
+		return nil
 	}
 
 	fmt.Printf("Executing %s for instance: %s\n", action, resolvedName)
 
-	// Execute action
 	switch action {
 	case "start":
-		err = bwhClient.Start(ctx)
+		err = api.Start(ctx)
 	case "stop":
-		err = bwhClient.Stop(ctx)
+		err = api.Stop(ctx)
 	case "restart":
-		err = bwhClient.Restart(ctx)
+		err = api.Restart(ctx)
 	case "kill":
-		err = bwhClient.Kill(ctx)
+		err = api.Kill(ctx)
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
@@ -196,63 +190,86 @@ func executeVPSAction(ctx context.Context, cmd *cli.Command, action string, need
 	return nil
 }
 
-func confirmAction(action, instanceName string, args ...string) bool {
-	var prompt string
-	switch action {
-	case "stop":
-		prompt = fmt.Sprintf("Stop VPS '%s'? [y/N]: ", instanceName)
-	case "restart":
-		prompt = fmt.Sprintf("Restart VPS '%s'? [y/N]: ", instanceName)
-	case "kill":
-		fmt.Printf("⚠️  WARNING: KILL will forcefully terminate VPS '%s'\n", instanceName)
-		fmt.Printf("⚠️  ANY UNSAVED DATA WILL BE LOST!\n")
-		prompt = "Type 'kill' to confirm: "
-	case "reset root password":
-		fmt.Printf("Reset root password for VPS '%s'?\n", instanceName)
-		fmt.Printf("This will generate a new random root password.\n")
-		prompt = "Continue? [y/N]: "
-	case "set hostname":
-		if len(args) > 0 {
-			fmt.Printf("Set hostname to '%s' for VPS '%s'? [y/N]: ", args[0], instanceName)
-		} else {
-			fmt.Printf("Set hostname for VPS '%s'? [y/N]: ", instanceName)
-		}
-		prompt = ""
-	case "set PTR":
-		if len(args) >= 2 {
-			fmt.Printf("Set PTR record for IP '%s' to '%s' for VPS '%s'? [y/N]: ", args[0], args[1], instanceName)
-		} else {
-			fmt.Printf("Set PTR record for VPS '%s'? [y/N]: ", instanceName)
-		}
-		prompt = ""
-	case "mount ISO":
-		if len(args) > 0 {
-			fmt.Printf("Mount ISO '%s' for VPS '%s'?\n", args[0], instanceName)
-		} else {
-			fmt.Printf("Mount ISO for VPS '%s'?\n", instanceName)
-		}
-		fmt.Printf("⚠️  VPS must be completely shut down and restarted after this operation.\n")
-		prompt = "Continue? [y/N]: "
-	case "unmount ISO":
-		fmt.Printf("Unmount ISO for VPS '%s'?\n", instanceName)
-		fmt.Printf("⚠️  VPS must be completely shut down and restarted after this operation.\n")
-		prompt = "Continue? [y/N]: "
-	}
+type hostnameAPI interface {
+	GetServiceInfo(context.Context) (*client.ServiceInfo, error)
+	SetHostname(context.Context, string) error
+}
 
-	if prompt != "" {
-		fmt.Print(prompt)
-	}
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
+func runSetHostname(ctx context.Context, api hostnameAPI, resolvedName, newHostname string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	info, err := api.GetServiceInfo(ctx)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to get service info: %w", err)
+	}
+	if info.Hostname == newHostname {
+		fmt.Printf("✅ Hostname is already '%s' (no change needed)\n", newHostname)
+		return nil
+	}
+	if dryRun {
+		printDryRun("setHostname", resolvedName, fmt.Sprintf("hostname: %s -> %s", info.Hostname, newHostname))
+		return nil
+	}
+	confirmed, err := confirmWrite(fmt.Sprintf("Set hostname to '%s' for VPS '%s'?", newHostname, resolvedName), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
 	}
 
-	response = strings.TrimSpace(strings.ToLower(response))
+	fmt.Printf("Setting hostname to '%s' for instance: %s\n", newHostname, resolvedName)
+	if err := api.SetHostname(ctx, newHostname); err != nil {
+		return fmt.Errorf("failed to set hostname: %w", err)
+	}
+	fmt.Printf("✅ Hostname set to '%s' successfully\n", newHostname)
+	return nil
+}
 
-	if action == "kill" {
-		return response == "kill"
+type ptrAPI interface {
+	GetServiceInfo(context.Context) (*client.ServiceInfo, error)
+	SetPTR(context.Context, string, string) error
+}
+
+func runSetPTR(ctx context.Context, api ptrAPI, resolvedName, ip, ptr string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	info, err := api.GetServiceInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get service info: %w", err)
+	}
+	if !info.RDNSAPIAvailable {
+		return fmt.Errorf("rDNS API is not available for instance %s", resolvedName)
+	}
+	if !slices.Contains(info.IPAddresses, ip) {
+		return fmt.Errorf("IP address %s is not assigned to instance %s", ip, resolvedName)
+	}
+	currentPTR := ""
+	if info.PTR != nil {
+		currentPTR = info.PTR[ip]
+	}
+	if currentPTR == ptr {
+		fmt.Printf("✅ PTR record for IP '%s' is already '%s' (no change needed)\n", ip, ptr)
+		return nil
+	}
+	if dryRun {
+		printDryRun("setPTR", resolvedName, fmt.Sprintf("ip: %s", ip), fmt.Sprintf("ptr: %s -> %s", currentPTR, ptr))
+		return nil
+	}
+	confirmed, err := confirmWrite(fmt.Sprintf("Set PTR record for IP '%s' to '%s' on VPS '%s'?", ip, ptr, resolvedName), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
 	}
 
-	return response == "y" || response == "yes"
+	fmt.Printf("Setting PTR record for IP '%s' to '%s' for instance: %s\n", ip, ptr, resolvedName)
+	if err := api.SetPTR(ctx, ip, ptr); err != nil {
+		return fmt.Errorf("failed to set PTR record: %w", err)
+	}
+	fmt.Printf("✅ PTR record set for IP '%s' to '%s' successfully\n", ip, ptr)
+	return nil
+}
+
+func confirmKill(prompt string) (bool, error) {
+	fmt.Printf("⚠️  WARNING: %s\n", prompt)
+	fmt.Printf("⚠️  ANY UNSAVED DATA WILL BE LOST!\n")
+	return promptExactConfirmation("Type 'kill' to confirm: ", "kill")
 }

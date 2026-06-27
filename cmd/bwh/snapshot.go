@@ -39,18 +39,13 @@ var snapshotCmd = &cli.Command{
 var snapshotCreateCmd = &cli.Command{
 	Name:  "create",
 	Usage: "create a snapshot",
-	Flags: []cli.Flag{
+	Flags: writeFlags(
 		&cli.StringFlag{
 			Name:    "description",
 			Aliases: []string{"d"},
 			Usage:   "description for the snapshot",
 		},
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
@@ -62,34 +57,7 @@ var snapshotCreateCmd = &cli.Command{
 			description = fmt.Sprintf("Created via bwh CLI on %s", time.Now().Format("2006-01-02 15:04:05"))
 		}
 
-		if !cmd.Bool("yes") {
-			fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
-			fmt.Printf("Description: %s\n", description)
-			fmt.Printf("\n⚠️  WARNING: This operation will create a snapshot of the current VPS state.\n")
-			fmt.Printf("The VPS will be AUTOMATICALLY RESTARTED and temporarily locked during snapshot creation.\n")
-			fmt.Printf("All running processes will be terminated and services will be interrupted.\n")
-			confirmed, err := promptConfirmation("Continue with snapshot creation and VPS restart?")
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				fmt.Printf("Operation cancelled\n")
-				return nil
-			}
-		}
-
-		fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
-		resp, err := bwhClient.CreateSnapshot(ctx, description)
-		if err != nil {
-			return fmt.Errorf("failed to create snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Snapshot creation initiated\n")
-		if resp.NotificationEmail != "" {
-			fmt.Printf("📧 Notification will be sent to: %s\n", resp.NotificationEmail)
-		}
-
-		return nil
+		return runSnapshotCreate(ctx, bwhClient, resolvedName, description, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -134,44 +102,19 @@ var snapshotDeleteCmd = &cli.Command{
 	Name:      "delete",
 	Usage:     "delete a snapshot",
 	ArgsUsage: "<filename>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("snapshot filename is required")
 		}
 		fileName := cmd.Args().First()
 
-		if !cmd.Bool("yes") {
-			confirmed, err := promptConfirmation(fmt.Sprintf("⚠️  Are you sure you want to delete snapshot '%s'? This cannot be undone.", fileName))
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				fmt.Printf("Operation cancelled\n")
-				return nil
-			}
-		}
-
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Deleting snapshot '%s' for instance: %s\n", fileName, resolvedName)
-
-		if err := bwhClient.DeleteSnapshot(ctx, fileName); err != nil {
-			return fmt.Errorf("failed to delete snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Snapshot '%s' deleted successfully\n", fileName)
-
-		return nil
+		return runSnapshotDelete(ctx, bwhClient, resolvedName, fileName, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -179,45 +122,19 @@ var snapshotRestoreCmd = &cli.Command{
 	Name:      "restore",
 	Usage:     "restore a snapshot (WARNING: overwrites all data)",
 	ArgsUsage: "<filename>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("snapshot filename is required")
 		}
 		fileName := cmd.Args().First()
 
-		if !cmd.Bool("yes") {
-			fmt.Printf("⚠️  WARNING: Restoring snapshot '%s' will OVERWRITE ALL DATA on the VPS!\n", fileName)
-			confirmed, err := promptConfirmation("This operation cannot be undone. Are you sure?")
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				fmt.Printf("Operation cancelled\n")
-				return nil
-			}
-		}
-
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Restoring snapshot '%s' for instance: %s\n", fileName, resolvedName)
-
-		if err := bwhClient.RestoreSnapshot(ctx, fileName); err != nil {
-			return fmt.Errorf("failed to restore snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Snapshot '%s' restoration initiated\n", fileName)
-
-		return nil
+		return runSnapshotRestore(ctx, bwhClient, resolvedName, fileName, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -225,13 +142,7 @@ var snapshotPinCmd = &cli.Command{
 	Name:      "pin",
 	Usage:     "pin a snapshot (make it sticky - never purged)",
 	ArgsUsage: "<filename_or_index>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("snapshot filename or index is required")
@@ -244,13 +155,7 @@ var snapshotUnpinCmd = &cli.Command{
 	Name:      "unpin",
 	Usage:     "unpin a snapshot (remove sticky - can be purged)",
 	ArgsUsage: "<filename_or_index>",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "yes",
-			Aliases: []string{"y"},
-			Usage:   "skip confirmation prompt",
-		},
-	},
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("snapshot filename or index is required")
@@ -263,6 +168,7 @@ var snapshotExportCmd = &cli.Command{
 	Name:      "export",
 	Usage:     "export a snapshot for transfer to another instance",
 	ArgsUsage: "<filename>",
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("snapshot filename is required")
@@ -274,20 +180,7 @@ var snapshotExportCmd = &cli.Command{
 			return err
 		}
 
-		fmt.Printf("Exporting snapshot '%s' for instance: %s\n", fileName, resolvedName)
-
-		resp, err := bwhClient.ExportSnapshot(ctx, fileName)
-		if err != nil {
-			return fmt.Errorf("failed to export snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Snapshot export completed\n")
-		fmt.Printf("\n📋 EXPORT DETAILS\n")
-		fmt.Printf("   Source VEID  : %s\n", instance.VeID)
-		fmt.Printf("   Source Token : %s\n", resp.Token)
-		fmt.Printf("\n💡 Use these values with 'bwh snapshot import <source_veid> <source_token>' on the target instance\n")
-
-		return nil
+		return runSnapshotExport(ctx, bwhClient, resolvedName, instance.VeID, fileName, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -295,27 +188,26 @@ var snapshotImportCmd = &cli.Command{
 	Name:      "import",
 	Usage:     "import a snapshot from another instance",
 	ArgsUsage: "<source_veid> <source_token>",
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 2 {
 			return fmt.Errorf("source VEID and source token are required")
 		}
 		sourceVeid := cmd.Args().Get(0)
 		sourceToken := cmd.Args().Get(1)
+		if strings.TrimSpace(sourceVeid) == "" {
+			return fmt.Errorf("source VEID cannot be empty")
+		}
+		if strings.TrimSpace(sourceToken) == "" {
+			return fmt.Errorf("source token cannot be empty")
+		}
 
 		bwhClient, resolvedName, err := createBWHClient(cmd)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Importing snapshot from VEID '%s' to instance: %s\n", sourceVeid, resolvedName)
-
-		if err := bwhClient.ImportSnapshot(ctx, sourceVeid, sourceToken); err != nil {
-			return fmt.Errorf("failed to import snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Snapshot import initiated successfully\n")
-
-		return nil
+		return runSnapshotImport(ctx, bwhClient, resolvedName, sourceVeid, sourceToken, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -525,6 +417,212 @@ func isPrintableASCII(s string) bool {
 	return true
 }
 
+type snapshotWriteAPI interface {
+	ListSnapshots(context.Context) (*client.SnapshotListResponse, error)
+	DeleteSnapshot(context.Context, string) error
+	RestoreSnapshot(context.Context, string) error
+}
+
+type snapshotCreateAPI interface {
+	CreateSnapshot(context.Context, string) (*client.CreateSnapshotResponse, error)
+}
+
+type snapshotExportAPI interface {
+	ListSnapshots(context.Context) (*client.SnapshotListResponse, error)
+	ExportSnapshot(context.Context, string) (*client.SnapshotExportResponse, error)
+}
+
+type snapshotImportAPI interface {
+	ImportSnapshot(context.Context, string, string) error
+}
+
+func runSnapshotCreate(ctx context.Context, api snapshotCreateAPI, resolvedName, description string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	if dryRun {
+		printDryRun("snapshot/create", resolvedName, fmt.Sprintf("description: %s", description))
+		return nil
+	}
+
+	if !skipConfirm {
+		fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
+		fmt.Printf("Description: %s\n", description)
+		fmt.Printf("\n⚠️  WARNING: This operation will create a snapshot of the current VPS state.\n")
+		fmt.Printf("The VPS will be AUTOMATICALLY RESTARTED and temporarily locked during snapshot creation.\n")
+		fmt.Printf("All running processes will be terminated and services will be interrupted.\n")
+	}
+	confirmed, err := confirmWrite("Continue with snapshot creation and VPS restart?", skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
+	resp, err := api.CreateSnapshot(ctx, description)
+	if err != nil {
+		return fmt.Errorf("failed to create snapshot: %w", err)
+	}
+
+	fmt.Printf("✅ Snapshot creation initiated\n")
+	if resp.NotificationEmail != "" {
+		fmt.Printf("📧 Notification will be sent to: %s\n", resp.NotificationEmail)
+	}
+
+	return nil
+}
+
+func runSnapshotExport(ctx context.Context, api snapshotExportAPI, resolvedName, sourceVeid, fileName string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	if err := ensureSnapshotExists(ctx, api, fileName); err != nil {
+		return err
+	}
+	if dryRun {
+		printDryRun("snapshot/export", resolvedName, fmt.Sprintf("snapshot: %s", fileName))
+		return nil
+	}
+	confirmed, err := confirmWrite(fmt.Sprintf("Export snapshot '%s' from instance '%s'?", fileName, resolvedName), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Exporting snapshot '%s' for instance: %s\n", fileName, resolvedName)
+	resp, err := api.ExportSnapshot(ctx, fileName)
+	if err != nil {
+		return fmt.Errorf("failed to export snapshot: %w", err)
+	}
+
+	fmt.Printf("✅ Snapshot export completed\n")
+	fmt.Printf("\n📋 EXPORT DETAILS\n")
+	fmt.Printf("   Source VEID  : %s\n", sourceVeid)
+	fmt.Printf("   Source Token : %s\n", resp.Token)
+	fmt.Printf("\n💡 Use these values with 'bwh snapshot import <source_veid> <source_token>' on the target instance\n")
+	return nil
+}
+
+func runSnapshotImport(ctx context.Context, api snapshotImportAPI, resolvedName, sourceVeid, sourceToken string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	sourceVeid = strings.TrimSpace(sourceVeid)
+	sourceToken = strings.TrimSpace(sourceToken)
+	if sourceVeid == "" {
+		return fmt.Errorf("source VEID cannot be empty")
+	}
+	if sourceToken == "" {
+		return fmt.Errorf("source token cannot be empty")
+	}
+
+	if dryRun {
+		printDryRun("snapshot/import", resolvedName, fmt.Sprintf("sourceVeid: %s", sourceVeid), fmt.Sprintf("sourceToken: %s", maskSensitive(sourceToken)))
+		return nil
+	}
+	confirmed, err := confirmWrite(fmt.Sprintf("Import snapshot from VEID '%s' to instance '%s'?", sourceVeid, resolvedName), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Importing snapshot from VEID '%s' to instance: %s\n", sourceVeid, resolvedName)
+	if err := api.ImportSnapshot(ctx, sourceVeid, sourceToken); err != nil {
+		return fmt.Errorf("failed to import snapshot: %w", err)
+	}
+
+	fmt.Printf("✅ Snapshot import initiated successfully\n")
+	return nil
+}
+
+func findSnapshotByName(snapshots []client.SnapshotInfo, fileName string) (*client.SnapshotInfo, bool) {
+	for i := range snapshots {
+		if snapshots[i].FileName == fileName {
+			return &snapshots[i], true
+		}
+	}
+	return nil, false
+}
+
+func ensureSnapshotExists(ctx context.Context, api interface {
+	ListSnapshots(context.Context) (*client.SnapshotListResponse, error)
+}, fileName string,
+) error {
+	resp, err := api.ListSnapshots(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list snapshots: %w", err)
+	}
+	if _, ok := findSnapshotByName(resp.Snapshots, fileName); !ok {
+		return fmt.Errorf("snapshot '%s' not found", fileName)
+	}
+	return nil
+}
+
+func runSnapshotDelete(ctx context.Context, api snapshotWriteAPI, resolvedName, fileName string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	resp, err := api.ListSnapshots(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list snapshots: %w", err)
+	}
+	snapshot, ok := findSnapshotByName(resp.Snapshots, fileName)
+	if !ok {
+		return fmt.Errorf("snapshot '%s' not found", fileName)
+	}
+	fmt.Printf("Target snapshot for instance '%s':\n", resolvedName)
+	fmt.Printf("   File Name    : %s\n", snapshot.FileName)
+	fmt.Printf("   OS           : %s\n", snapshot.OS)
+	fmt.Printf("   Size         : %s\n", progress.FormatBytes(snapshot.Size.Value))
+
+	if dryRun {
+		printDryRun("snapshot/delete", resolvedName, fmt.Sprintf("snapshot: %s", fileName))
+		return nil
+	}
+	confirmed, err := confirmWrite(fmt.Sprintf("Delete snapshot '%s'? This cannot be undone.", fileName), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Deleting snapshot '%s' for instance: %s\n", fileName, resolvedName)
+	if err := api.DeleteSnapshot(ctx, fileName); err != nil {
+		return fmt.Errorf("failed to delete snapshot: %w", err)
+	}
+	fmt.Printf("✅ Snapshot '%s' deleted successfully\n", fileName)
+	return nil
+}
+
+func runSnapshotRestore(ctx context.Context, api snapshotWriteAPI, resolvedName, fileName string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	resp, err := api.ListSnapshots(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list snapshots: %w", err)
+	}
+	snapshot, ok := findSnapshotByName(resp.Snapshots, fileName)
+	if !ok {
+		return fmt.Errorf("snapshot '%s' not found", fileName)
+	}
+	fmt.Printf("Target snapshot for instance '%s':\n", resolvedName)
+	fmt.Printf("   File Name    : %s\n", snapshot.FileName)
+	fmt.Printf("   OS           : %s\n", snapshot.OS)
+	fmt.Printf("   Size         : %s\n", progress.FormatBytes(snapshot.Size.Value))
+
+	if dryRun {
+		printDryRun("snapshot/restore", resolvedName, fmt.Sprintf("snapshot: %s", fileName))
+		return nil
+	}
+	confirmed, err := confirmWrite(fmt.Sprintf("Restore snapshot '%s'? This will overwrite all VPS data.", fileName), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Restoring snapshot '%s' for instance: %s\n", fileName, resolvedName)
+	if err := api.RestoreSnapshot(ctx, fileName); err != nil {
+		return fmt.Errorf("failed to restore snapshot: %w", err)
+	}
+	fmt.Printf("✅ Snapshot '%s' restoration initiated\n", fileName)
+	return nil
+}
+
 // downloadFileWithFallback attempts to download using HTTPS first, then falls back to HTTP
 func downloadFileWithFallback(ctx context.Context, snapshot *client.SnapshotInfo, outputPath string) error {
 	// Try HTTPS first if available
@@ -667,8 +765,16 @@ func toggleSnapshotSticky(ctx context.Context, cmd *cli.Command, identifier stri
 		return err
 	}
 
-	// Get snapshots to resolve identifier
-	snapshotsResp, err := bwhClient.ListSnapshots(ctx)
+	return runToggleSnapshotSticky(ctx, bwhClient, resolvedName, identifier, sticky, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
+}
+
+type snapshotStickyAPI interface {
+	ListSnapshots(context.Context) (*client.SnapshotListResponse, error)
+	ToggleSnapshotSticky(context.Context, string, bool) error
+}
+
+func runToggleSnapshotSticky(ctx context.Context, api snapshotStickyAPI, resolvedName, identifier string, sticky, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	snapshotsResp, err := api.ListSnapshots(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list snapshots: %w", err)
 	}
@@ -736,20 +842,24 @@ func toggleSnapshotSticky(ctx context.Context, cmd *cli.Command, identifier stri
 		return nil
 	}
 
-	if !cmd.Bool("yes") {
-		fmt.Printf("\n⚠️  Are you sure you want to %s this snapshot?\n", action)
-		fmt.Printf("After this change, the snapshot %s.\n", newState)
-		confirmed, err := promptConfirmation("Continue?")
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			fmt.Printf("Operation cancelled\n")
-			return nil
-		}
+	if dryRun {
+		printDryRun("snapshot/toggleSticky", resolvedName, fmt.Sprintf("snapshot: %s", fileName), fmt.Sprintf("sticky: %v", sticky))
+		return nil
 	}
 
-	if err := bwhClient.ToggleSnapshotSticky(ctx, fileName, sticky); err != nil {
+	if !skipConfirm {
+		fmt.Printf("\n⚠️  Are you sure you want to %s this snapshot?\n", action)
+		fmt.Printf("After this change, the snapshot %s.\n", newState)
+	}
+	confirmed, err := confirmWrite("Continue?", skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	if err := api.ToggleSnapshotSticky(ctx, fileName, sticky); err != nil {
 		return fmt.Errorf("failed to %s snapshot: %w", action, err)
 	}
 
