@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/strahe/bwh/pkg/client"
 )
@@ -221,6 +222,89 @@ func TestRunBackupCopyToSnapshotMasksMissingTokenError(t *testing.T) {
 	}
 }
 
+type fakeISOAPI struct {
+	service   *client.ServiceInfo
+	mounted   []string
+	unmounted int
+}
+
+func (f *fakeISOAPI) GetServiceInfo(context.Context) (*client.ServiceInfo, error) {
+	return f.service, nil
+}
+
+func (f *fakeISOAPI) MountISO(_ context.Context, iso string) error {
+	f.mounted = append(f.mounted, iso)
+	return nil
+}
+
+func (f *fakeISOAPI) UnmountISO(context.Context) error {
+	f.unmounted++
+	return nil
+}
+
+func TestRunISOSafety(t *testing.T) {
+	api := &fakeISOAPI{service: &client.ServiceInfo{
+		AvailableISOs: []string{"ubuntu.iso", "debian.iso"},
+		ISO1:          "debian.iso",
+	}}
+
+	out := captureStdout(t, func() {
+		if err := runMountISO(context.Background(), api, "test", "ubuntu.iso", true, false, confirmNo); err != nil {
+			t.Fatalf("runMountISO() error = %v", err)
+		}
+	})
+	if len(api.mounted) != 0 {
+		t.Fatalf("mounted = %v, want none", api.mounted)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	if err := runMountISO(context.Background(), api, "test", "ubuntu.iso", false, false, confirmNo); err != nil {
+		t.Fatalf("runMountISO() error = %v", err)
+	}
+	if len(api.mounted) != 0 {
+		t.Fatalf("mounted = %v, want none after cancel", api.mounted)
+	}
+
+	if err := runMountISO(context.Background(), api, "test", "ubuntu.iso", false, true, confirmNo); err != nil {
+		t.Fatalf("runMountISO() error = %v", err)
+	}
+	if len(api.mounted) != 1 || api.mounted[0] != "ubuntu.iso" {
+		t.Fatalf("mounted = %v, want [ubuntu.iso]", api.mounted)
+	}
+
+	out = captureStdout(t, func() {
+		if err := runUnmountISO(context.Background(), api, "test", true, false, confirmNo); err != nil {
+			t.Fatalf("runUnmountISO() error = %v", err)
+		}
+	})
+	if api.unmounted != 0 {
+		t.Fatalf("unmounted = %d, want 0", api.unmounted)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	if err := runUnmountISO(context.Background(), api, "test", false, true, confirmNo); err != nil {
+		t.Fatalf("runUnmountISO() error = %v", err)
+	}
+	if api.unmounted != 1 {
+		t.Fatalf("unmounted = %d, want 1", api.unmounted)
+	}
+
+	if err := runMountISO(context.Background(), api, "test", "missing.iso", true, true, confirmNo); err == nil {
+		t.Fatal("runMountISO() error = nil, want unavailable ISO error")
+	}
+	noopAPI := &fakeISOAPI{service: &client.ServiceInfo{AvailableISOs: []string{"debian.iso"}, ISO1: "debian.iso"}}
+	if err := runMountISO(context.Background(), noopAPI, "test", "debian.iso", false, true, confirmNo); err != nil {
+		t.Fatalf("runMountISO() noop error = %v", err)
+	}
+	if len(noopAPI.mounted) != 0 {
+		t.Fatalf("mounted = %v, want none for noop", noopAPI.mounted)
+	}
+}
+
 type fakeIPv6API struct {
 	service *client.ServiceInfo
 	added   int
@@ -411,6 +495,72 @@ func TestRunResetPasswordDryRunDoesNotPromptOrWrite(t *testing.T) {
 	}
 }
 
+func TestRunResetPasswordDefaultDryRunDoesNotCreateDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	api := &fakeResetPasswordAPI{}
+
+	out := captureStdout(t, func() {
+		if err := runResetPassword(context.Background(), api, "test", "", true, false, confirmNo); err != nil {
+			t.Fatalf("runResetPassword() error = %v", err)
+		}
+	})
+	if api.calls != 0 {
+		t.Fatalf("calls = %d, want 0", api.calls)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".bwh")); !os.IsNotExist(err) {
+		t.Fatalf("default output directory should not be created during dry-run, stat error = %v", err)
+	}
+	if !strings.Contains(out, filepath.Join(home, ".bwh")) {
+		t.Fatalf("dry-run output missing secure default directory:\n%s", out)
+	}
+}
+
+func TestRunResetPasswordDefaultOutputUsesSecureBWHDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	api := &fakeResetPasswordAPI{}
+
+	out := captureStdout(t, func() {
+		if err := runResetPassword(context.Background(), api, "test", "", false, true, confirmNo); err != nil {
+			t.Fatalf("runResetPassword() error = %v", err)
+		}
+	})
+	if api.calls != 1 {
+		t.Fatalf("calls = %d, want 1", api.calls)
+	}
+
+	outputDir := filepath.Join(home, ".bwh")
+	info, err := os.Stat(outputDir)
+	if err != nil {
+		t.Fatalf("failed to stat default output directory: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("default output path is not a directory: %s", outputDir)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("default output directory mode = %o, want 700", got)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(outputDir, "password_*.txt"))
+	if err != nil {
+		t.Fatalf("failed to glob default output files: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("default output files = %v, want one password file", matches)
+	}
+	content, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatalf("failed to read default output file: %v", err)
+	}
+	if !strings.Contains(string(content), "Password: secret") {
+		t.Fatalf("default output file missing password:\n%s", content)
+	}
+	if !strings.Contains(out, matches[0]) {
+		t.Fatalf("output missing saved file path:\n%s", out)
+	}
+}
+
 func TestRunResetPasswordPreparesOutputBeforeAPI(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/password.txt"
@@ -569,9 +719,9 @@ func TestRunReinstallSafety(t *testing.T) {
 		},
 	}}
 	out := captureStdout(t, func() {
-		if err := runReinstall(context.Background(), api, "test", "ubuntu-24.04-x86_64", false, true, false, func(string, string, string) bool {
+		if err := runReinstall(context.Background(), api, "test", "ubuntu-24.04-x86_64", false, true, false, func(string, string, string) (bool, error) {
 			t.Fatal("confirm called during dry-run")
-			return false
+			return false, nil
 		}); err != nil {
 			t.Fatalf("runReinstall() error = %v", err)
 		}
@@ -583,8 +733,8 @@ func TestRunReinstallSafety(t *testing.T) {
 		t.Fatalf("output missing DRY RUN:\n%s", out)
 	}
 
-	if err := runReinstall(context.Background(), api, "test", "ubuntu-24.04-x86_64", false, false, true, func(string, string, string) bool {
-		return false
+	if err := runReinstall(context.Background(), api, "test", "ubuntu-24.04-x86_64", false, false, true, func(string, string, string) (bool, error) {
+		return false, nil
 	}); err != nil {
 		t.Fatalf("runReinstall() error = %v", err)
 	}
@@ -599,6 +749,8 @@ type fakeSnapshotAPI struct {
 	deleted   []string
 	restored  []string
 	sticky    []string
+	exported  []string
+	imported  []string
 }
 
 func (f *fakeSnapshotAPI) CreateSnapshot(_ context.Context, description string) (*client.CreateSnapshotResponse, error) {
@@ -622,6 +774,16 @@ func (f *fakeSnapshotAPI) RestoreSnapshot(_ context.Context, fileName string) er
 
 func (f *fakeSnapshotAPI) ToggleSnapshotSticky(_ context.Context, fileName string, sticky bool) error {
 	f.sticky = append(f.sticky, fmt.Sprintf("%s=%v", fileName, sticky))
+	return nil
+}
+
+func (f *fakeSnapshotAPI) ExportSnapshot(_ context.Context, fileName string) (*client.SnapshotExportResponse, error) {
+	f.exported = append(f.exported, fileName)
+	return &client.SnapshotExportResponse{Token: "export-token"}, nil
+}
+
+func (f *fakeSnapshotAPI) ImportSnapshot(_ context.Context, sourceVeid, sourceToken string) error {
+	f.imported = append(f.imported, sourceVeid+"="+sourceToken)
 	return nil
 }
 
@@ -686,5 +848,128 @@ func TestRunSnapshotDeleteAndRestoreSafety(t *testing.T) {
 	}
 	if len(api.restored) != 0 {
 		t.Fatalf("restored = %v, want none", api.restored)
+	}
+}
+
+func TestRunSnapshotExportImportSafety(t *testing.T) {
+	token := "0123456789abcdef0123456789abcdef01234567"
+	api := &fakeSnapshotAPI{snapshots: []client.SnapshotInfo{{FileName: "snap.tar.gz", OS: "debian"}}}
+
+	out := captureStdout(t, func() {
+		if err := runSnapshotExport(context.Background(), api, "test", "12345", "snap.tar.gz", true, false, confirmNo); err != nil {
+			t.Fatalf("runSnapshotExport() error = %v", err)
+		}
+	})
+	if len(api.exported) != 0 {
+		t.Fatalf("exported = %v, want none", api.exported)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	if err := runSnapshotExport(context.Background(), api, "test", "12345", "snap.tar.gz", false, false, confirmNo); err != nil {
+		t.Fatalf("runSnapshotExport() error = %v", err)
+	}
+	if len(api.exported) != 0 {
+		t.Fatalf("exported = %v, want none after cancel", api.exported)
+	}
+
+	if err := runSnapshotExport(context.Background(), api, "test", "12345", "snap.tar.gz", false, true, confirmNo); err != nil {
+		t.Fatalf("runSnapshotExport() error = %v", err)
+	}
+	if len(api.exported) != 1 || api.exported[0] != "snap.tar.gz" {
+		t.Fatalf("exported = %v, want [snap.tar.gz]", api.exported)
+	}
+
+	out = captureStdout(t, func() {
+		if err := runSnapshotImport(context.Background(), api, "test", "12345", token, true, false, confirmNo); err != nil {
+			t.Fatalf("runSnapshotImport() error = %v", err)
+		}
+	})
+	if len(api.imported) != 0 {
+		t.Fatalf("imported = %v, want none", api.imported)
+	}
+	if strings.Contains(out, token) {
+		t.Fatalf("dry-run output leaked full source token:\n%s", out)
+	}
+	if !strings.Contains(out, "0123...4567") {
+		t.Fatalf("dry-run output missing masked source token:\n%s", out)
+	}
+
+	if err := runSnapshotImport(context.Background(), api, "test", "12345", token, false, false, confirmNo); err != nil {
+		t.Fatalf("runSnapshotImport() error = %v", err)
+	}
+	if len(api.imported) != 0 {
+		t.Fatalf("imported = %v, want none after cancel", api.imported)
+	}
+
+	if err := runSnapshotImport(context.Background(), api, "test", "12345", token, false, true, confirmNo); err != nil {
+		t.Fatalf("runSnapshotImport() error = %v", err)
+	}
+	if len(api.imported) != 1 || api.imported[0] != "12345="+token {
+		t.Fatalf("imported = %v, want source pair", api.imported)
+	}
+}
+
+type fakeMigrationAPI struct {
+	locations *client.MigrateLocationsResponse
+	started   []string
+}
+
+func (f *fakeMigrationAPI) GetMigrateLocations(context.Context) (*client.MigrateLocationsResponse, error) {
+	return f.locations, nil
+}
+
+func (f *fakeMigrationAPI) StartMigrationWithTimeout(_ context.Context, locationID string, timeout time.Duration) (*client.MigrateStartResponse, error) {
+	f.started = append(f.started, fmt.Sprintf("%s@%s", locationID, timeout))
+	return &client.MigrateStartResponse{
+		NotificationEmail: "ops@example.com",
+		NewIPs:            []string{"192.0.2.10", "2001:db8::1"},
+	}, nil
+}
+
+func TestRunMigrateStartSafety(t *testing.T) {
+	api := &fakeMigrationAPI{locations: &client.MigrateLocationsResponse{
+		CurrentLocation: "us-east",
+		Locations:       []string{"us-west", "eu"},
+		Descriptions:    map[string]string{"us-west": "US West"},
+	}}
+
+	out := captureStdout(t, func() {
+		if err := runMigrateStart(context.Background(), api, "test", "us-west", 15*time.Minute, false, true, false, confirmNo); err != nil {
+			t.Fatalf("runMigrateStart() error = %v", err)
+		}
+	})
+	if len(api.started) != 0 {
+		t.Fatalf("started = %v, want none", api.started)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	if err := runMigrateStart(context.Background(), api, "test", "us-west", 15*time.Minute, false, false, false, confirmNo); err != nil {
+		t.Fatalf("runMigrateStart() error = %v", err)
+	}
+	if len(api.started) != 0 {
+		t.Fatalf("started = %v, want none after cancel", api.started)
+	}
+
+	if err := runMigrateStart(context.Background(), api, "test", "us-west", 15*time.Minute, false, false, true, confirmNo); err != nil {
+		t.Fatalf("runMigrateStart() error = %v", err)
+	}
+	if len(api.started) != 1 || api.started[0] != "us-west@15m0s" {
+		t.Fatalf("started = %v, want [us-west@15m0s]", api.started)
+	}
+
+	noopAPI := &fakeMigrationAPI{locations: &client.MigrateLocationsResponse{CurrentLocation: "us-west", Locations: []string{"us-west"}}}
+	if err := runMigrateStart(context.Background(), noopAPI, "test", "us-west", 15*time.Minute, false, false, true, confirmNo); err != nil {
+		t.Fatalf("runMigrateStart() noop error = %v", err)
+	}
+	if len(noopAPI.started) != 0 {
+		t.Fatalf("started = %v, want none for noop", noopAPI.started)
+	}
+
+	if err := runMigrateStart(context.Background(), api, "test", "missing", 15*time.Minute, false, true, true, confirmNo); err == nil {
+		t.Fatal("runMigrateStart() error = nil, want unavailable location error")
 	}
 }

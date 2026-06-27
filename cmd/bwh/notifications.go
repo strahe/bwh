@@ -20,18 +20,6 @@ var notificationsCmd = &cli.Command{
 	},
 }
 
-var notificationsWriteFlags = []cli.Flag{
-	&cli.BoolFlag{
-		Name:    "yes",
-		Aliases: []string{"y"},
-		Usage:   "skip confirmation prompt",
-	},
-	&cli.BoolFlag{
-		Name:  "dry-run",
-		Usage: "validate and show the write action without calling the write API",
-	},
-}
-
 var notificationsListCmd = &cli.Command{
 	Name:  "list",
 	Usage: "list KiwiVM notification preferences",
@@ -56,7 +44,7 @@ var notificationsSetCmd = &cli.Command{
 	Name:      "set",
 	Usage:     "set a KiwiVM notification preference",
 	ArgsUsage: "<preference_id> <on|off>",
-	Flags:     notificationsWriteFlags,
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 2 {
 			return fmt.Errorf("notifications set requires exactly two arguments: <preference_id> <on|off>")
@@ -75,7 +63,7 @@ var notificationsSetCmd = &cli.Command{
 			return err
 		}
 
-		return runNotificationSet(ctx, bwhClient, resolvedName, preferenceID, enabled, cmd.Bool("dry-run"), cmd.Bool("yes"), promptConfirmation)
+		return runNotificationSet(ctx, bwhClient, resolvedName, preferenceID, enabled, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -181,18 +169,16 @@ func runNotificationSet(
 		return nil
 	}
 	if dryRun {
-		fmt.Printf("\nDRY RUN: would update notification preference '%s' on instance %s\n", preferenceID, resolvedName)
+		fmt.Println()
+		printDryRun("kiwivm/setNotificationPreferences", resolvedName, fmt.Sprintf("preference: %s -> %s", preferenceID, enabledStatus(boolToInt(enabled))))
 		return nil
 	}
-	if !skipConfirm {
-		confirmed, err := confirm(fmt.Sprintf("Update notification preference '%s'?", preferenceID))
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			fmt.Printf("Operation cancelled\n")
-			return nil
-		}
+	confirmed, err := confirmWrite(fmt.Sprintf("Update notification preference '%s'?", preferenceID), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
 	}
 
 	updateResp, err := api.SetNotificationPreferences(ctx, map[string]bool{preferenceID: enabled})

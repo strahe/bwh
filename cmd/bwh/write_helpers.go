@@ -95,6 +95,10 @@ func printDryRun(endpoint, instanceName string, details ...string) {
 }
 
 func maskSensitive(value string) string {
+	return maskSecret(value)
+}
+
+func maskSecret(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return ""

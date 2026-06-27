@@ -20,13 +20,29 @@ func generateRandomFileName() (string, error) {
 	return fmt.Sprintf("password_%x.txt", result), nil
 }
 
+func defaultPasswordOutputPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
+	if homeDir == "" {
+		return "", fmt.Errorf("failed to get user home directory")
+	}
+
+	fileName, err := generateRandomFileName()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".bwh", fileName), nil
+}
+
 var resetPasswordCmd = &cli.Command{
 	Name:  "reset-password",
 	Usage: "reset the root password",
 	Flags: writeFlags(
 		&cli.StringFlag{
 			Name:    "output",
-			Usage:   "output password to specified file (creates random file if not specified)",
+			Usage:   "output password to specified file (defaults to a random file under ~/.bwh)",
 			Aliases: []string{"o"},
 		},
 	),
@@ -48,8 +64,9 @@ type resetPasswordAPI interface {
 
 func runResetPassword(ctx context.Context, api resetPasswordAPI, resolvedName, outputFile string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
 	filePath := outputFile
+	usingDefaultOutput := filePath == ""
 	if filePath == "" {
-		generatedPath, err := generateRandomFileName()
+		generatedPath, err := defaultPasswordOutputPath()
 		if err != nil {
 			return err
 		}
@@ -60,7 +77,7 @@ func runResetPassword(ctx context.Context, api resetPasswordAPI, resolvedName, o
 		absPath = filePath
 	}
 
-	fileExists, err := preflightPasswordOutput(filePath)
+	fileExists, err := preflightPasswordOutput(filePath, usingDefaultOutput && !dryRun, usingDefaultOutput && dryRun)
 	if err != nil {
 		return err
 	}
@@ -127,7 +144,7 @@ func runResetPassword(ctx context.Context, api resetPasswordAPI, resolvedName, o
 	return nil
 }
 
-func preflightPasswordOutput(filePath string) (bool, error) {
+func preflightPasswordOutput(filePath string, createParent, allowMissingParent bool) (bool, error) {
 	info, err := os.Stat(filePath)
 	if err == nil {
 		if info.IsDir() {
@@ -148,11 +165,28 @@ func preflightPasswordOutput(filePath string) (bool, error) {
 
 	parent := filepath.Dir(filePath)
 	info, err = os.Stat(parent)
+	if os.IsNotExist(err) && createParent {
+		if err := os.MkdirAll(parent, 0o700); err != nil {
+			return false, fmt.Errorf("failed to create output directory: %w", err)
+		}
+		if err := os.Chmod(parent, 0o700); err != nil {
+			return false, fmt.Errorf("failed to secure output directory permissions: %w", err)
+		}
+		info, err = os.Stat(parent)
+	}
+	if os.IsNotExist(err) && allowMissingParent {
+		return false, nil
+	}
 	if err != nil {
 		return false, fmt.Errorf("failed to check output directory: %w", err)
 	}
 	if !info.IsDir() {
 		return false, fmt.Errorf("output parent path is not a directory: %s", parent)
+	}
+	if createParent {
+		if err := os.Chmod(parent, 0o700); err != nil {
+			return false, fmt.Errorf("failed to secure output directory permissions: %w", err)
+		}
 	}
 	return false, nil
 }

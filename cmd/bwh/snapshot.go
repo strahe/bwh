@@ -180,35 +180,7 @@ var snapshotExportCmd = &cli.Command{
 			return err
 		}
 
-		if err := ensureSnapshotExists(ctx, bwhClient, fileName); err != nil {
-			return err
-		}
-		if cmd.Bool("dry-run") {
-			printDryRun("snapshot/export", resolvedName, fmt.Sprintf("snapshot: %s", fileName))
-			return nil
-		}
-		confirmed, err := confirmWrite(fmt.Sprintf("Export snapshot '%s' from instance '%s'?", fileName, resolvedName), skipConfirm(cmd), promptConfirmation)
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			return nil
-		}
-
-		fmt.Printf("Exporting snapshot '%s' for instance: %s\n", fileName, resolvedName)
-
-		resp, err := bwhClient.ExportSnapshot(ctx, fileName)
-		if err != nil {
-			return fmt.Errorf("failed to export snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Snapshot export completed\n")
-		fmt.Printf("\n📋 EXPORT DETAILS\n")
-		fmt.Printf("   Source VEID  : %s\n", instance.VeID)
-		fmt.Printf("   Source Token : %s\n", resp.Token)
-		fmt.Printf("\n💡 Use these values with 'bwh snapshot import <source_veid> <source_token>' on the target instance\n")
-
-		return nil
+		return runSnapshotExport(ctx, bwhClient, resolvedName, instance.VeID, fileName, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -235,27 +207,7 @@ var snapshotImportCmd = &cli.Command{
 			return err
 		}
 
-		if cmd.Bool("dry-run") {
-			printDryRun("snapshot/import", resolvedName, fmt.Sprintf("sourceVeid: %s", sourceVeid), fmt.Sprintf("sourceToken: %s", maskSensitive(sourceToken)))
-			return nil
-		}
-		confirmed, err := confirmWrite(fmt.Sprintf("Import snapshot from VEID '%s' to instance '%s'?", sourceVeid, resolvedName), skipConfirm(cmd), promptConfirmation)
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			return nil
-		}
-
-		fmt.Printf("Importing snapshot from VEID '%s' to instance: %s\n", sourceVeid, resolvedName)
-
-		if err := bwhClient.ImportSnapshot(ctx, sourceVeid, sourceToken); err != nil {
-			return fmt.Errorf("failed to import snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Snapshot import initiated successfully\n")
-
-		return nil
+		return runSnapshotImport(ctx, bwhClient, resolvedName, sourceVeid, sourceToken, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -475,6 +427,15 @@ type snapshotCreateAPI interface {
 	CreateSnapshot(context.Context, string) (*client.CreateSnapshotResponse, error)
 }
 
+type snapshotExportAPI interface {
+	ListSnapshots(context.Context) (*client.SnapshotListResponse, error)
+	ExportSnapshot(context.Context, string) (*client.SnapshotExportResponse, error)
+}
+
+type snapshotImportAPI interface {
+	ImportSnapshot(context.Context, string, string) error
+}
+
 func runSnapshotCreate(ctx context.Context, api snapshotCreateAPI, resolvedName, description string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
 	if dryRun {
 		printDryRun("snapshot/create", resolvedName, fmt.Sprintf("description: %s", description))
@@ -507,6 +468,67 @@ func runSnapshotCreate(ctx context.Context, api snapshotCreateAPI, resolvedName,
 		fmt.Printf("📧 Notification will be sent to: %s\n", resp.NotificationEmail)
 	}
 
+	return nil
+}
+
+func runSnapshotExport(ctx context.Context, api snapshotExportAPI, resolvedName, sourceVeid, fileName string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	if err := ensureSnapshotExists(ctx, api, fileName); err != nil {
+		return err
+	}
+	if dryRun {
+		printDryRun("snapshot/export", resolvedName, fmt.Sprintf("snapshot: %s", fileName))
+		return nil
+	}
+	confirmed, err := confirmWrite(fmt.Sprintf("Export snapshot '%s' from instance '%s'?", fileName, resolvedName), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Exporting snapshot '%s' for instance: %s\n", fileName, resolvedName)
+	resp, err := api.ExportSnapshot(ctx, fileName)
+	if err != nil {
+		return fmt.Errorf("failed to export snapshot: %w", err)
+	}
+
+	fmt.Printf("✅ Snapshot export completed\n")
+	fmt.Printf("\n📋 EXPORT DETAILS\n")
+	fmt.Printf("   Source VEID  : %s\n", sourceVeid)
+	fmt.Printf("   Source Token : %s\n", resp.Token)
+	fmt.Printf("\n💡 Use these values with 'bwh snapshot import <source_veid> <source_token>' on the target instance\n")
+	return nil
+}
+
+func runSnapshotImport(ctx context.Context, api snapshotImportAPI, resolvedName, sourceVeid, sourceToken string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	sourceVeid = strings.TrimSpace(sourceVeid)
+	sourceToken = strings.TrimSpace(sourceToken)
+	if sourceVeid == "" {
+		return fmt.Errorf("source VEID cannot be empty")
+	}
+	if sourceToken == "" {
+		return fmt.Errorf("source token cannot be empty")
+	}
+
+	if dryRun {
+		printDryRun("snapshot/import", resolvedName, fmt.Sprintf("sourceVeid: %s", sourceVeid), fmt.Sprintf("sourceToken: %s", maskSensitive(sourceToken)))
+		return nil
+	}
+	confirmed, err := confirmWrite(fmt.Sprintf("Import snapshot from VEID '%s' to instance '%s'?", sourceVeid, resolvedName), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Importing snapshot from VEID '%s' to instance: %s\n", sourceVeid, resolvedName)
+	if err := api.ImportSnapshot(ctx, sourceVeid, sourceToken); err != nil {
+		return fmt.Errorf("failed to import snapshot: %w", err)
+	}
+
+	fmt.Printf("✅ Snapshot import initiated successfully\n")
 	return nil
 }
 

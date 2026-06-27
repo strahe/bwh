@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -46,7 +44,7 @@ type reinstallAPI interface {
 	ReinstallOS(context.Context, string) error
 }
 
-type reinstallConfirmationFunc func(instanceName, currentOS, targetOS string) bool
+type reinstallConfirmationFunc func(instanceName, currentOS, targetOS string) (bool, error)
 
 func runReinstall(ctx context.Context, api reinstallAPI, resolvedName, osTemplate string, listOnly, dryRun, skipConfirm bool, confirm reinstallConfirmationFunc) error {
 	osInfo, err := api.GetAvailableOS(ctx)
@@ -86,7 +84,11 @@ func runReinstall(ctx context.Context, api reinstallAPI, resolvedName, osTemplat
 	}
 
 	if !skipConfirm {
-		if !confirm(resolvedName, osInfo.Installed, osTemplate) {
+		confirmed, err := confirm(resolvedName, osInfo.Installed, osTemplate)
+		if err != nil {
+			return err
+		}
+		if !confirmed {
 			printOperationCancelled()
 			return nil
 		}
@@ -159,7 +161,7 @@ func isValidOSTemplate(template string, availableTemplates []string) bool {
 	return false
 }
 
-func confirmReinstall(instanceName, currentOS, targetOS string) bool {
+func confirmReinstall(instanceName, currentOS, targetOS string) (bool, error) {
 	fmt.Printf("🚨 DANGER: OS REINSTALL WILL DESTROY ALL DATA!\n")
 	fmt.Printf("🚨 This action is IRREVERSIBLE!\n")
 	fmt.Printf("\n")
@@ -170,14 +172,5 @@ func confirmReinstall(instanceName, currentOS, targetOS string) bool {
 	fmt.Printf("⚠️  MAKE SURE YOU HAVE BACKUPS!\n")
 	fmt.Printf("\n")
 	fmt.Printf("To confirm this dangerous operation, type the target OS exactly: %s\n", targetOS)
-	fmt.Printf("Type here: ")
-
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return false
-	}
-
-	response = strings.TrimSpace(response)
-	return response == targetOS
+	return promptExactConfirmation("Type here: ", targetOS)
 }

@@ -22,18 +22,6 @@ var abuseCmd = &cli.Command{
 	},
 }
 
-var abuseWriteFlags = []cli.Flag{
-	&cli.BoolFlag{
-		Name:    "yes",
-		Aliases: []string{"y"},
-		Usage:   "skip confirmation prompt",
-	},
-	&cli.BoolFlag{
-		Name:  "dry-run",
-		Usage: "validate and show the write action without calling the write API",
-	},
-}
-
 var abuseSuspensionsCmd = &cli.Command{
 	Name:  "suspensions",
 	Usage: "show service suspension details",
@@ -78,7 +66,7 @@ var abuseUnsuspendCmd = &cli.Command{
 	Name:      "unsuspend",
 	Usage:     "clear a soft abuse issue and unsuspend the VPS",
 	ArgsUsage: "<record_id>",
-	Flags:     abuseWriteFlags,
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("record_id is required")
@@ -93,7 +81,7 @@ var abuseUnsuspendCmd = &cli.Command{
 			return err
 		}
 
-		return runAbuseUnsuspend(ctx, bwhClient, resolvedName, recordID, cmd.Bool("dry-run"), cmd.Bool("yes"), promptConfirmation)
+		return runAbuseUnsuspend(ctx, bwhClient, resolvedName, recordID, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -101,7 +89,7 @@ var abuseResolvePolicyCmd = &cli.Command{
 	Name:      "resolve-policy",
 	Usage:     "mark a soft policy violation as resolved",
 	ArgsUsage: "<record_id>",
-	Flags:     abuseWriteFlags,
+	Flags:     writeFlags(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		if cmd.Args().Len() != 1 {
 			return fmt.Errorf("record_id is required")
@@ -116,7 +104,7 @@ var abuseResolvePolicyCmd = &cli.Command{
 			return err
 		}
 
-		return runAbuseResolvePolicy(ctx, bwhClient, resolvedName, recordID, cmd.Bool("dry-run"), cmd.Bool("yes"), promptConfirmation)
+		return runAbuseResolvePolicy(ctx, bwhClient, resolvedName, recordID, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -224,18 +212,15 @@ func runAbuseUnsuspend(ctx context.Context, api abuseAPI, resolvedName string, r
 		return fmt.Errorf("suspension case #%d cannot be resolved through API; contact support", recordID)
 	}
 	if dryRun {
-		fmt.Printf("DRY RUN: would call unsuspend for case #%d on instance %s\n", recordID, resolvedName)
+		printDryRun("unsuspend", resolvedName, fmt.Sprintf("case: #%d", recordID))
 		return nil
 	}
-	if !skipConfirm {
-		confirmed, err := confirm(fmt.Sprintf("Unsuspend VPS by clearing case #%d?", recordID))
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			fmt.Printf("Operation cancelled\n")
-			return nil
-		}
+	confirmed, err := confirmWrite(fmt.Sprintf("Unsuspend VPS by clearing case #%d?", recordID), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
 	}
 
 	if err := api.Unsuspend(ctx, recordID); err != nil {
@@ -261,18 +246,15 @@ func runAbuseResolvePolicy(ctx context.Context, api abuseAPI, resolvedName strin
 		return fmt.Errorf("policy violation case #%d cannot be resolved through API; contact support", recordID)
 	}
 	if dryRun {
-		fmt.Printf("DRY RUN: would call resolvePolicyViolation for case #%d on instance %s\n", recordID, resolvedName)
+		printDryRun("resolvePolicyViolation", resolvedName, fmt.Sprintf("case: #%d", recordID))
 		return nil
 	}
-	if !skipConfirm {
-		confirmed, err := confirm(fmt.Sprintf("Mark policy violation case #%d as resolved?", recordID))
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			fmt.Printf("Operation cancelled\n")
-			return nil
-		}
+	confirmed, err := confirmWrite(fmt.Sprintf("Mark policy violation case #%d as resolved?", recordID), skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
 	}
 
 	if err := api.ResolvePolicyViolation(ctx, recordID); err != nil {
