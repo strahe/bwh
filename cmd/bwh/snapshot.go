@@ -57,39 +57,7 @@ var snapshotCreateCmd = &cli.Command{
 			description = fmt.Sprintf("Created via bwh CLI on %s", time.Now().Format("2006-01-02 15:04:05"))
 		}
 
-		if cmd.Bool("dry-run") {
-			printDryRun("snapshot/create", resolvedName, fmt.Sprintf("description: %s", description))
-			return nil
-		}
-
-		if !cmd.Bool("yes") {
-			fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
-			fmt.Printf("Description: %s\n", description)
-			fmt.Printf("\n⚠️  WARNING: This operation will create a snapshot of the current VPS state.\n")
-			fmt.Printf("The VPS will be AUTOMATICALLY RESTARTED and temporarily locked during snapshot creation.\n")
-			fmt.Printf("All running processes will be terminated and services will be interrupted.\n")
-			confirmed, err := promptConfirmation("Continue with snapshot creation and VPS restart?")
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				fmt.Printf("Operation cancelled\n")
-				return nil
-			}
-		}
-
-		fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
-		resp, err := bwhClient.CreateSnapshot(ctx, description)
-		if err != nil {
-			return fmt.Errorf("failed to create snapshot: %w", err)
-		}
-
-		fmt.Printf("✅ Snapshot creation initiated\n")
-		if resp.NotificationEmail != "" {
-			fmt.Printf("📧 Notification will be sent to: %s\n", resp.NotificationEmail)
-		}
-
-		return nil
+		return runSnapshotCreate(ctx, bwhClient, resolvedName, description, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
 	},
 }
 
@@ -503,6 +471,45 @@ type snapshotWriteAPI interface {
 	RestoreSnapshot(context.Context, string) error
 }
 
+type snapshotCreateAPI interface {
+	CreateSnapshot(context.Context, string) (*client.CreateSnapshotResponse, error)
+}
+
+func runSnapshotCreate(ctx context.Context, api snapshotCreateAPI, resolvedName, description string, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	if dryRun {
+		printDryRun("snapshot/create", resolvedName, fmt.Sprintf("description: %s", description))
+		return nil
+	}
+
+	if !skipConfirm {
+		fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
+		fmt.Printf("Description: %s\n", description)
+		fmt.Printf("\n⚠️  WARNING: This operation will create a snapshot of the current VPS state.\n")
+		fmt.Printf("The VPS will be AUTOMATICALLY RESTARTED and temporarily locked during snapshot creation.\n")
+		fmt.Printf("All running processes will be terminated and services will be interrupted.\n")
+	}
+	confirmed, err := confirmWrite("Continue with snapshot creation and VPS restart?", skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
+	}
+
+	fmt.Printf("Creating snapshot for instance: %s\n", resolvedName)
+	resp, err := api.CreateSnapshot(ctx, description)
+	if err != nil {
+		return fmt.Errorf("failed to create snapshot: %w", err)
+	}
+
+	fmt.Printf("✅ Snapshot creation initiated\n")
+	if resp.NotificationEmail != "" {
+		fmt.Printf("📧 Notification will be sent to: %s\n", resp.NotificationEmail)
+	}
+
+	return nil
+}
+
 func findSnapshotByName(snapshots []client.SnapshotInfo, fileName string) (*client.SnapshotInfo, bool) {
 	for i := range snapshots {
 		if snapshots[i].FileName == fileName {
@@ -736,8 +743,16 @@ func toggleSnapshotSticky(ctx context.Context, cmd *cli.Command, identifier stri
 		return err
 	}
 
-	// Get snapshots to resolve identifier
-	snapshotsResp, err := bwhClient.ListSnapshots(ctx)
+	return runToggleSnapshotSticky(ctx, bwhClient, resolvedName, identifier, sticky, cmd.Bool("dry-run"), skipConfirm(cmd), promptConfirmation)
+}
+
+type snapshotStickyAPI interface {
+	ListSnapshots(context.Context) (*client.SnapshotListResponse, error)
+	ToggleSnapshotSticky(context.Context, string, bool) error
+}
+
+func runToggleSnapshotSticky(ctx context.Context, api snapshotStickyAPI, resolvedName, identifier string, sticky, dryRun, skipConfirm bool, confirm confirmationFunc) error {
+	snapshotsResp, err := api.ListSnapshots(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list snapshots: %w", err)
 	}
@@ -805,25 +820,24 @@ func toggleSnapshotSticky(ctx context.Context, cmd *cli.Command, identifier stri
 		return nil
 	}
 
-	if cmd.Bool("dry-run") {
+	if dryRun {
 		printDryRun("snapshot/toggleSticky", resolvedName, fmt.Sprintf("snapshot: %s", fileName), fmt.Sprintf("sticky: %v", sticky))
 		return nil
 	}
 
-	if !cmd.Bool("yes") {
+	if !skipConfirm {
 		fmt.Printf("\n⚠️  Are you sure you want to %s this snapshot?\n", action)
 		fmt.Printf("After this change, the snapshot %s.\n", newState)
-		confirmed, err := promptConfirmation("Continue?")
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			fmt.Printf("Operation cancelled\n")
-			return nil
-		}
+	}
+	confirmed, err := confirmWrite("Continue?", skipConfirm, confirm)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return nil
 	}
 
-	if err := bwhClient.ToggleSnapshotSticky(ctx, fileName, sticky); err != nil {
+	if err := api.ToggleSnapshotSticky(ctx, fileName, sticky); err != nil {
 		return fmt.Errorf("failed to %s snapshot: %w", action, err)
 	}
 

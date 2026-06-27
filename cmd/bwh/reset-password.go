@@ -156,38 +156,35 @@ func preflightPasswordOutput(filePath string) (bool, error) {
 }
 
 type passwordOutputFile struct {
-	file    *os.File
-	path    string
-	created bool
-	closed  bool
+	file       *os.File
+	targetPath string
+	tempPath   string
+	closed     bool
 }
 
 func openPasswordOutputFile(filePath string, fileExists bool) (*passwordOutputFile, error) {
-	flags := os.O_WRONLY
-	created := false
-	if !fileExists {
-		flags |= os.O_CREATE | os.O_EXCL
-		created = true
-	}
-
-	file, err := os.OpenFile(filePath, flags, 0o600)
+	dir := filepath.Dir(filePath)
+	base := filepath.Base(filePath)
+	file, err := os.CreateTemp(dir, "."+base+".tmp-")
 	if err != nil {
 		if fileExists {
-			return nil, fmt.Errorf("failed to open output file before resetting password: %w", err)
+			return nil, fmt.Errorf("failed to create temporary output file before resetting password: %w", err)
 		}
 		return nil, fmt.Errorf("failed to create output file before resetting password: %w", err)
 	}
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+		if fileExists {
+			return nil, fmt.Errorf("failed to prepare temporary output file before resetting password: %w", err)
+		}
+		return nil, fmt.Errorf("failed to prepare output file before resetting password: %w", err)
+	}
 
-	return &passwordOutputFile{file: file, path: filePath, created: created}, nil
+	return &passwordOutputFile{file: file, targetPath: filePath, tempPath: file.Name()}, nil
 }
 
 func (o *passwordOutputFile) write(content string) error {
-	if err := o.file.Truncate(0); err != nil {
-		return err
-	}
-	if _, err := o.file.Seek(0, 0); err != nil {
-		return err
-	}
 	if _, err := o.file.WriteString(content); err != nil {
 		return err
 	}
@@ -196,6 +193,9 @@ func (o *passwordOutputFile) write(content string) error {
 		return err
 	}
 	o.closed = true
+	if err := os.Rename(o.tempPath, o.targetPath); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -207,7 +207,5 @@ func (o *passwordOutputFile) abort() {
 		_ = o.file.Close()
 		o.closed = true
 	}
-	if o.created {
-		_ = os.Remove(o.path)
-	}
+	_ = os.Remove(o.tempPath)
 }

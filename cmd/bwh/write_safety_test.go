@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -220,6 +221,149 @@ func TestRunBackupCopyToSnapshotMasksMissingTokenError(t *testing.T) {
 	}
 }
 
+type fakeIPv6API struct {
+	service *client.ServiceInfo
+	added   int
+	deleted []string
+}
+
+func (f *fakeIPv6API) GetServiceInfo(context.Context) (*client.ServiceInfo, error) {
+	return f.service, nil
+}
+
+func (f *fakeIPv6API) AddIPv6(context.Context) (*client.IPv6AddResponse, error) {
+	f.added++
+	return &client.IPv6AddResponse{AssignedSubnet: "2001:db8:abcd::"}, nil
+}
+
+func (f *fakeIPv6API) DeleteIPv6(_ context.Context, subnet string) error {
+	f.deleted = append(f.deleted, subnet)
+	return nil
+}
+
+func TestRunIPv6Safety(t *testing.T) {
+	api := &fakeIPv6API{service: &client.ServiceInfo{
+		LocationIPv6Ready: true,
+		PlanMaxIPv6s:      2,
+		IPAddresses:       []string{"2001:db8:abcd::/64"},
+	}}
+
+	out := captureStdout(t, func() {
+		if err := runIPv6Add(context.Background(), api, "test", true, false, confirmNo); err != nil {
+			t.Fatalf("runIPv6Add() error = %v", err)
+		}
+	})
+	if api.added != 0 {
+		t.Fatalf("added = %d, want 0", api.added)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	out = captureStdout(t, func() {
+		if err := runIPv6Delete(context.Background(), api, "test", "2001:db8:abcd::", true, false, confirmNo); err != nil {
+			t.Fatalf("runIPv6Delete() error = %v", err)
+		}
+	})
+	if len(api.deleted) != 0 {
+		t.Fatalf("deleted = %v, want none", api.deleted)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	if err := runIPv6Add(context.Background(), api, "test", false, false, confirmNo); err != nil {
+		t.Fatalf("runIPv6Add() error = %v", err)
+	}
+	if api.added != 0 {
+		t.Fatalf("added = %d, want 0 after cancel", api.added)
+	}
+
+	if err := runIPv6Add(context.Background(), api, "test", false, true, confirmNo); err != nil {
+		t.Fatalf("runIPv6Add() error = %v", err)
+	}
+	if api.added != 1 {
+		t.Fatalf("added = %d, want 1", api.added)
+	}
+}
+
+type fakePrivateIPAPI struct {
+	service   *client.ServiceInfo
+	available *client.PrivateIPAvailableResponse
+	assigned  []string
+	deleted   []string
+}
+
+func (f *fakePrivateIPAPI) GetServiceInfo(context.Context) (*client.ServiceInfo, error) {
+	return f.service, nil
+}
+
+func (f *fakePrivateIPAPI) GetAvailablePrivateIPs(context.Context) (*client.PrivateIPAvailableResponse, error) {
+	return f.available, nil
+}
+
+func (f *fakePrivateIPAPI) AssignPrivateIP(_ context.Context, ip string) (*client.PrivateIPAssignResponse, error) {
+	f.assigned = append(f.assigned, ip)
+	if ip == "" {
+		ip = "10.0.0.10"
+	}
+	return &client.PrivateIPAssignResponse{AssignedIPs: []string{ip}}, nil
+}
+
+func (f *fakePrivateIPAPI) DeletePrivateIP(_ context.Context, ip string) error {
+	f.deleted = append(f.deleted, ip)
+	return nil
+}
+
+func TestRunPrivateIPSafety(t *testing.T) {
+	api := &fakePrivateIPAPI{
+		service: &client.ServiceInfo{
+			PlanPrivateNetworkAvailable:     true,
+			LocationPrivateNetworkAvailable: true,
+			PrivateIPAddresses:              []string{"10.0.0.20"},
+		},
+		available: &client.PrivateIPAvailableResponse{AvailableIPs: []string{"10.0.0.10"}},
+	}
+
+	out := captureStdout(t, func() {
+		if err := runPrivateIPAssign(context.Background(), api, "test", "10.0.0.10", true, false, confirmNo); err != nil {
+			t.Fatalf("runPrivateIPAssign() error = %v", err)
+		}
+	})
+	if len(api.assigned) != 0 {
+		t.Fatalf("assigned = %v, want none", api.assigned)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	out = captureStdout(t, func() {
+		if err := runPrivateIPDelete(context.Background(), api, "test", "10.0.0.20", true, false, confirmNo); err != nil {
+			t.Fatalf("runPrivateIPDelete() error = %v", err)
+		}
+	})
+	if len(api.deleted) != 0 {
+		t.Fatalf("deleted = %v, want none", api.deleted)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	if err := runPrivateIPAssign(context.Background(), api, "test", "10.0.0.10", false, false, confirmNo); err != nil {
+		t.Fatalf("runPrivateIPAssign() error = %v", err)
+	}
+	if len(api.assigned) != 0 {
+		t.Fatalf("assigned = %v, want none after cancel", api.assigned)
+	}
+
+	if err := runPrivateIPAssign(context.Background(), api, "test", "10.0.0.10", false, true, confirmNo); err != nil {
+		t.Fatalf("runPrivateIPAssign() error = %v", err)
+	}
+	if len(api.assigned) != 1 || api.assigned[0] != "10.0.0.10" {
+		t.Fatalf("assigned = %v, want [10.0.0.10]", api.assigned)
+	}
+}
+
 type fakeResetPasswordAPI struct {
 	calls      int
 	beforeCall func() error
@@ -272,7 +416,14 @@ func TestRunResetPasswordPreparesOutputBeforeAPI(t *testing.T) {
 	path := dir + "/password.txt"
 	api := &fakeResetPasswordAPI{
 		beforeCall: func() error {
-			info, err := os.Stat(path)
+			matches, err := filepath.Glob(filepath.Join(dir, ".password.txt.tmp-*"))
+			if err != nil {
+				return err
+			}
+			if len(matches) != 1 {
+				return fmt.Errorf("temporary output files = %v, want one", matches)
+			}
+			info, err := os.Stat(matches[0])
 			if err != nil {
 				return err
 			}
@@ -312,6 +463,35 @@ func TestRunResetPasswordRemovesNewOutputOnAPIError(t *testing.T) {
 	}
 	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
 		t.Fatalf("output file should be removed after API error, stat error = %v", statErr)
+	}
+}
+
+func TestPasswordOutputPreservesExistingFileOnWriteError(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/password.txt"
+	if err := os.WriteFile(path, []byte("old-password"), 0o600); err != nil {
+		t.Fatalf("failed to seed output file: %v", err)
+	}
+
+	output, err := openPasswordOutputFile(path, true)
+	if err != nil {
+		t.Fatalf("openPasswordOutputFile() error = %v", err)
+	}
+	if err := output.file.Close(); err != nil {
+		t.Fatalf("failed to close temp output file: %v", err)
+	}
+
+	if err := output.write("new-password"); err == nil {
+		t.Fatal("passwordOutputFile.write() error = nil, want error")
+	}
+	output.abort()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	if string(content) != "old-password" {
+		t.Fatalf("output file content = %q, want old password preserved", content)
 	}
 }
 
@@ -373,8 +553,15 @@ func TestRunReinstallSafety(t *testing.T) {
 
 type fakeSnapshotAPI struct {
 	snapshots []client.SnapshotInfo
+	created   []string
 	deleted   []string
 	restored  []string
+	sticky    []string
+}
+
+func (f *fakeSnapshotAPI) CreateSnapshot(_ context.Context, description string) (*client.CreateSnapshotResponse, error) {
+	f.created = append(f.created, description)
+	return &client.CreateSnapshotResponse{}, nil
 }
 
 func (f *fakeSnapshotAPI) ListSnapshots(context.Context) (*client.SnapshotListResponse, error) {
@@ -389,6 +576,53 @@ func (f *fakeSnapshotAPI) DeleteSnapshot(_ context.Context, fileName string) err
 func (f *fakeSnapshotAPI) RestoreSnapshot(_ context.Context, fileName string) error {
 	f.restored = append(f.restored, fileName)
 	return nil
+}
+
+func (f *fakeSnapshotAPI) ToggleSnapshotSticky(_ context.Context, fileName string, sticky bool) error {
+	f.sticky = append(f.sticky, fmt.Sprintf("%s=%v", fileName, sticky))
+	return nil
+}
+
+func TestRunSnapshotCreateAndStickySafety(t *testing.T) {
+	api := &fakeSnapshotAPI{snapshots: []client.SnapshotInfo{{FileName: "snap.tar.gz", OS: "debian", Sticky: false}}}
+
+	out := captureStdout(t, func() {
+		if err := runSnapshotCreate(context.Background(), api, "test", "desc", true, false, confirmNo); err != nil {
+			t.Fatalf("runSnapshotCreate() error = %v", err)
+		}
+	})
+	if len(api.created) != 0 {
+		t.Fatalf("created = %v, want none", api.created)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	if err := runSnapshotCreate(context.Background(), api, "test", "desc", false, false, confirmNo); err != nil {
+		t.Fatalf("runSnapshotCreate() error = %v", err)
+	}
+	if len(api.created) != 0 {
+		t.Fatalf("created = %v, want none after cancel", api.created)
+	}
+
+	out = captureStdout(t, func() {
+		if err := runToggleSnapshotSticky(context.Background(), api, "test", "snap.tar.gz", true, true, false, confirmNo); err != nil {
+			t.Fatalf("runToggleSnapshotSticky() error = %v", err)
+		}
+	})
+	if len(api.sticky) != 0 {
+		t.Fatalf("sticky = %v, want none", api.sticky)
+	}
+	if !strings.Contains(out, "DRY RUN") {
+		t.Fatalf("output missing DRY RUN:\n%s", out)
+	}
+
+	if err := runToggleSnapshotSticky(context.Background(), api, "test", "snap.tar.gz", true, false, true, confirmNo); err != nil {
+		t.Fatalf("runToggleSnapshotSticky() error = %v", err)
+	}
+	if len(api.sticky) != 1 || api.sticky[0] != "snap.tar.gz=true" {
+		t.Fatalf("sticky = %v, want [snap.tar.gz=true]", api.sticky)
+	}
 }
 
 func TestRunSnapshotDeleteAndRestoreSafety(t *testing.T) {
